@@ -1,0 +1,626 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pioneer Planner</title>
+<style>
+:root{--bg:#12151a;--panel:#1a1e25;--line:#2a313c;--text:#e3e8ef;--muted:#93a0b2;--accent:#f59e0b;--accent2:#38bdf8;--bad:#f87171;--mid:#fbbf24;--ok:#4ade80;color-scheme:dark}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 "Segoe UI",Roboto,system-ui,sans-serif}
+header{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:12px 18px;border-bottom:1px solid var(--line);background:#151920;position:sticky;top:0;z-index:5}
+header h1{font-size:17px;margin:0 12px 0 0;color:var(--accent)}header .info{color:var(--muted);font-size:13px}
+select,input,button,textarea{font:inherit;color:var(--text);background:#0f1217;border:1px solid var(--line);border-radius:6px;padding:6px 9px}
+button{background:#232a35;cursor:pointer}button.primary{background:var(--accent);color:#111;border-color:var(--accent);font-weight:600}button:hover{filter:brightness(1.15)}
+nav{display:flex;gap:4px;padding:10px 18px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
+nav button{border:none;border-bottom:2px solid transparent;border-radius:0;background:none;color:var(--muted);padding:8px 12px}
+nav button.on{color:var(--text);border-bottom-color:var(--accent)}
+main{max-width:1240px;margin:0 auto;padding:16px 18px 80px}section{display:none}section.on{display:block}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin-bottom:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 14px}.card b{display:block;font-size:18px}.card span{color:var(--muted);font-size:12px}
+.md table{border-collapse:collapse;width:100%;margin:6px 0 14px;font-size:13px}.md th,.md td{border-bottom:1px solid var(--line);padding:5px 8px;text-align:left;vertical-align:top}.md th{color:var(--muted)}
+.md h1{font-size:20px;margin:6px 0}.md h2{font-size:16px;margin:20px 0 6px}.md code{background:#0f1217;padding:1px 4px;border-radius:4px}
+.md li{margin:3px 0}.sev-high{color:var(--bad)}.sev-medium{color:var(--mid)}.sev-low{color:var(--muted)}
+.form{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:14px}
+.form fieldset{border:1px solid var(--line);border-radius:6px;padding:8px 10px;margin:0;min-width:0}
+.form select,.form input[type=text]{max-width:100%}.form .row label{overflow-wrap:anywhere}
+#goalMode{width:100%}
+#mapWrap{position:relative;height:62vh;min-height:380px;background:#0c0f13;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+#map{width:100%;height:100%;display:block;cursor:grab;touch-action:none;user-select:none}#map.drag{cursor:grabbing}
+.maptip{position:absolute;pointer-events:none;background:#1c2027;border:1px solid #3a4352;border-radius:6px;padding:6px 9px;font-size:12px;display:none;max-width:260px;z-index:2;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.mapnorth{position:absolute;top:8px;right:10px;color:#94a3b8;font-weight:700;font-size:13px}
+.mapscale{position:absolute;left:10px;bottom:8px;color:#94a3b8;font-size:11px;border-bottom:2px solid #94a3b8;text-align:center;padding-bottom:1px}
+.mapfilters{display:flex;flex-wrap:wrap;gap:6px}.mf{display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border-radius:999px;border:1px solid var(--line);background:#1a1e25;cursor:pointer;font-size:12px;user-select:none}
+.mf.off{opacity:.35}
+.searchbar{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin-bottom:8px}
+.hitnum{display:inline-flex;width:20px;height:20px;border-radius:50%;background:#0e7490;border:1px solid #22d3ee;color:#fff;font-size:11px;font-weight:700;align-items:center;justify-content:center}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:-1px}
+#nodesMd tr[data-id]:hover td{background:#1f2630}.mf i{width:10px;height:10px;border-radius:50%;display:inline-block}#planNodes,#rbNodes{max-height:260px;overflow-y:auto}.form legend{color:var(--muted);font-size:12px;padding:0 4px}
+.row{display:flex;gap:6px;align-items:center;margin:4px 0;flex-wrap:wrap}.row label{color:var(--muted);font-size:12px;min-width:84px}
+.target input[type=text]{flex:1;min-width:150px}.target input[type=number]{width:80px}
+iframe{width:100%;height:80vh;border:1px solid var(--line);border-radius:8px;background:#14171c}
+.err{background:#3b1515;border:1px solid #7f1d1d;border-radius:8px;padding:8px 12px;margin:8px 0}.busy{opacity:.6;pointer-events:none}
+textarea{width:100%;height:60vh}.hint{color:var(--muted);font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <h1>⚙ Pioneer Planner</h1>
+  <select id="save"></select><button id="loadBtn">Load save</button>
+  <span class="info" id="info">Loading…</span>
+</header>
+<nav id="tabs">
+  <button data-tab="overview" class="on">Overview</button>
+  <button data-tab="improve">Improvements</button>
+  <button data-tab="plan">Plan &amp; Design</button>
+  <button data-tab="rebuild">Rebuild</button>
+  <button data-tab="upgrade">Upgrade</button>
+  <button data-tab="nodes">Nodes</button>
+  <button data-tab="item">Item lookup</button>
+  <button data-tab="brief">AI brief</button>
+</nav>
+<main>
+  <section id="overview" class="on"><div class="cards" id="cards"></div><div class="md" id="statusMd"></div></section>
+  <section id="improve"><div class="md" id="improveMd"></div></section>
+  <section id="plan">
+    <div class="form" id="planForm">
+      <fieldset><legend>What to build</legend>
+        <div class="row"><label>How much?</label><select id="goalMode">
+          <option value="milestones">Automatic: whatever my next milestones need</option>
+          <option value="active">Automatic: only my active milestone</option>
+          <option value="items">Automatic: these items, as much as my nodes allow</option>
+          <option value="targets">I'll type the amounts</option>
+        </select></div>
+        <div id="goalHint" class="hint"></div>
+        <div id="targetsWrap">
+          <div id="targets"></div>
+          <div class="row"><button id="addTarget">+ add item</button></div>
+          <div class="row" id="maxRow"><label>or maximize</label><input type="text" id="maximize" list="itemsList" placeholder="item (uses available supply)"></div>
+        </div>
+      </fieldset>
+      <fieldset><legend>Nodes to use</legend>
+        <div class="hint">Tick nodes to use only those; tick none to use any free node within the radius.</div>
+        <div id="planNodes" class="hint">Loading nearby nodes…</div>
+        <div class="row"><label style="min-width:0"><input type="checkbox" id="planRebuild"> nodes with my miners count as free (I'll rebuild)</label></div>
+      </fieldset>
+      <fieldset><legend>Rules</legend>
+        <div class="row"><label>Resources</label><select id="resources"><option value="free-nodes">free nodes + spare on my miners</option><option value="existing-only">only spare on my miners</option><option value="all-nodes">all nodes on the map</option><option value="unlimited">unlimited (show full need)</option></select></div>
+        <div class="row"><label>Node radius (m)</label><input type="number" id="distance" value="1500" step="100" style="width:100px"></div>
+        <div class="row"><label><input type="checkbox" id="alts" checked> alternates</label><label><input type="checkbox" id="oc"> overclock</label><label><input type="checkbox" id="locked"> plan ahead (locked)</label></div>
+      </fieldset>
+      <fieldset><legend>Build area</legend>
+        <div class="row"><label>Surface</label><select id="mode"><option value="foundation">Foundations (floors)</option><option value="ground">Plain ground</option></select></div>
+        <div class="row"><label>Width × length</label><input type="number" id="width" placeholder="auto" style="width:80px"> × <input type="number" id="length" placeholder="auto" style="width:80px"> <select id="unit"><option value="foundations">foundations</option><option value="m">metres</option></select></div>
+        <div class="row"><label>Floors</label><select id="floors"><option>auto</option><option>1</option><option>2</option><option>3</option><option>4</option></select></div>
+        <div class="row"><label><input type="checkbox" id="bp"> also in-game blueprint (.sbp)</label></div>
+        <div class="row"><button id="planBtn">Plan</button><button id="designBtn" class="primary">Design layout</button></div>
+      </fieldset>
+    </div>
+    <div id="planOut"></div>
+  </section>
+  <section id="rebuild">
+    <p class="hint">Replace temporary builds safely: pick the nodes to use, and the tool plans the new factory, adds up what dismantling the old lines gives back (100% refund) plus your storage, and tells you what is still short, how to get it, and in which order to tear down and rebuild.</p>
+    <div class="form">
+      <fieldset><legend>1 · Nodes to use (none ticked = any node nearby)</legend><div id="rbNodes" class="hint">Loading nearby nodes…</div></fieldset>
+      <fieldset><legend>2 · Goal &amp; tear-down</legend>
+        <div class="row"><label>Build for</label><select id="rbGoal"><option value="tier">everything my next milestones + space elevator need</option><option value="active">only my active milestone</option><option value="targets">the targets on the Plan tab</option></select></div>
+        <div class="row"><button id="rbNeeds">What do I still need?</button></div>
+        <div class="row"><label>Dismantle</label><select id="rbScope"><option value="near">old lines within</option><option value="all">all old lines</option><option value="none">nothing</option></select><input type="number" id="rbRadius" value="250" style="width:80px"> m of HUB</div>
+        <div class="row"><label><input type="checkbox" id="rbPower"> also lines that feed my power</label></div>
+      </fieldset>
+      <fieldset><legend>3 · Build area</legend>
+        <div class="row"><label>Surface</label><select id="rbMode"><option value="foundation">Foundations (floors)</option><option value="ground">Plain ground</option></select></div>
+        <div class="row"><label>Width × length</label><input type="number" id="rbWidth" placeholder="auto" style="width:80px"> × <input type="number" id="rbLength" placeholder="auto" style="width:80px"> <select id="rbUnit"><option value="foundations">foundations</option><option value="m">metres</option></select></div>
+        <div class="row"><label>Floors</label><select id="rbFloors"><option>auto</option><option>1</option><option>2</option><option>3</option></select><label><input type="checkbox" id="rbBp"> blueprint</label></div>
+        <div class="row"><button id="rbBtn" class="primary">Plan rebuild</button></div>
+      </fieldset>
+    </div>
+    <div id="rbOut"></div>
+  </section>
+  <section id="upgrade">
+    <p class="hint">See what better belts and miners give you — also for tiers you have not unlocked yet, so you can plan ahead.</p>
+    <div class="form">
+      <fieldset><legend>Upgrade a line you already built</legend>
+        <div class="row"><label>Line</label><select id="upLine"><option>Loading…</option></select></div>
+        <div class="row"><label>Belts</label><select id="upBelt"></select></div>
+        <div class="row"><label>Miners</label><select id="upMiner"></select></div>
+        <div class="row"><button id="upLineBtn" class="primary">Plan line upgrade</button></div>
+      </fieldset>
+      <fieldset><legend>Compare a plan at better tiers</legend>
+        <div class="hint">Uses what you set on the <b>Plan &amp; Design</b> tab (how much, items, nodes) and plans it twice: with your current tiers and with these.</div>
+        <div class="row"><label>Belts</label><select id="cmpBelt"></select></div>
+        <div class="row"><label>Miners</label><select id="cmpMiner"></select></div>
+        <div class="row"><button id="cmpBtn" class="primary">Compare</button></div>
+      </fieldset>
+    </div>
+    <div id="upOut"></div>
+  </section>
+  <section id="nodes">
+    <div class="row searchbar">
+      <b style="color:var(--accent)">Find nodes</b>
+      <input type="text" id="nodeRes" list="rawList" placeholder="resource, e.g. Iron Ore (blank = any)" style="min-width:220px">
+      <select id="nodePur"><option value="">any purity</option><option>pure</option><option>normal</option><option>impure</option></select>
+      <label style="min-width:0"><input type="checkbox" id="nodeAll"> include used</label>
+      <select id="nodeNear"><option value="hub">nearest to HUB</option><option value="player">nearest to me</option></select>
+      <button id="nodeBtn" class="primary">Search</button><button id="nodeClear">Clear</button>
+    </div>
+    <div class="mapbar">
+      <div id="mapFilters" class="mapfilters"></div>
+      <div class="row" style="margin:6px 0">
+        <label style="min-width:0"><input type="checkbox" id="mapFree"> free only</label>
+        <select id="mapPurity"><option value="">any purity</option><option value="pure">pure only</option><option value="normal">normal + pure</option></select>
+        <button id="mapHub">Around my HUB</button><button id="mapAll">Whole map</button>
+        <button id="mapNone" title="hide all resources">hide all</button><button id="mapAllRes" title="show all resources">show all</button>
+      </div>
+    </div>
+    <div id="mapWrap"><svg id="map"></svg><div id="mapTip" class="maptip"></div><div class="mapnorth">N ↑</div><div id="mapScale" class="mapscale"></div></div>
+    <div class="hint" id="mapSel">Scroll to zoom, drag to move, hover a dot for details. <b>Click nodes to pick them</b> — they get ticked in the Plan &amp; Design and Rebuild tabs.</div>
+    <div id="nodesMd"></div>
+  </section>
+  <section id="item">
+    <div class="form"><fieldset><legend>Item</legend><div class="row"><input type="text" id="itemQ" list="itemsList" placeholder="e.g. Rotor"><button id="itemBtn" class="primary">Look up</button></div></fieldset></div>
+    <div class="md" id="itemMd"></div>
+  </section>
+  <section id="brief">
+    <p class="hint">Paste this into any AI chat (ChatGPT, Gemini, a local model…) to give it your factory as context. With Claude, use the MCP server instead so it can plan and draw layouts itself.</p>
+    <div class="row"><button id="copyBrief" class="primary">Copy</button></div>
+    <textarea id="briefTxt" readonly></textarea>
+  </section>
+</main>
+<datalist id="itemsList"></datalist>
+<datalist id="rawList"><option>Iron Ore</option><option>Copper Ore</option><option>Limestone</option><option>Coal</option><option>Caterium Ore</option><option>Raw Quartz</option><option>Sulfur</option><option>Bauxite</option><option>Uranium</option><option>Crude Oil</option><option>SAM</option><option>Nitrogen Gas</option><option>Water</option></datalist>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+
+function md(src) {
+  const lines = String(src || '').split('\n');
+  const out = [];
+  let i = 0;
+  const inline = (s) => esc(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/(^|\s)_(.+?)_(?=\s|$|[.,;:])/g, '$1<i>$2</i>').replace(/`(.+?)`/g, '<code>$1</code>')
+    .replace(/\[(high)\]/g, '<span class="sev-high">[high]</span>').replace(/\[(medium)\]/g, '<span class="sev-medium">[medium]</span>').replace(/\[(low)\]/g, '<span class="sev-low">[low]</span>');
+  while (i < lines.length) {
+    const l = lines[i];
+    if (/^\|/.test(l)) {
+      const rows = [];
+      while (i < lines.length && /^\|/.test(lines[i])) rows.push(lines[i++]);
+      const cells = (r) => r.replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
+      const head = cells(rows[0]);
+      const body = rows.slice(2).map(cells);
+      out.push(`<table><tr>${head.map((h) => `<th>${inline(h)}</th>`).join('')}</tr>${body.map((r) => `<tr>${r.map((c) => `<td>${inline(c)}</td>`).join('')}</tr>`).join('')}</table>`);
+      continue;
+    }
+    let m;
+    if ((m = l.match(/^(#{1,3}) (.*)/))) out.push(`<h${m[1].length}>${inline(m[2])}</h${m[1].length}>`);
+    else if (/^\s*[-*] /.test(l)) { const items = []; while (i < lines.length && /^\s*[-*] /.test(lines[i])) items.push(`<li>${inline(lines[i++].replace(/^\s*[-*] /, ''))}</li>`); out.push(`<ul>${items.join('')}</ul>`); continue; }
+    else if (/^\d+\. /.test(l)) {
+      const items = [];
+      while (i < lines.length && (/^\d+\. /.test(lines[i]) || /^\s{2,}\S/.test(lines[i]))) {
+        if (/^\d+\. /.test(lines[i])) items.push(inline(lines[i].replace(/^\d+\. /, '')));
+        else items[items.length - 1] += '<br>' + inline(lines[i].trim().replace(/^- /, '• '));
+        i++;
+      }
+      out.push(`<ol>${items.map((x) => `<li>${x}</li>`).join('')}</ol>`);
+      continue;
+    } else if (l.trim()) out.push(`<p>${inline(l)}</p>`);
+    i++;
+  }
+  return out.join('\n');
+}
+
+async function api(path, body) {
+  const r = await fetch(path, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {});
+  const j = await r.json();
+  if (!j.ok) throw new Error(j.error || 'request failed');
+  return j;
+}
+function showErr(el, e) { el.innerHTML = `<div class="err">${esc(e.message || e)}</div>`; }
+
+document.querySelectorAll('#tabs button').forEach((b) => b.onclick = () => {
+  document.querySelectorAll('#tabs button').forEach((x) => x.classList.toggle('on', x === b));
+  document.querySelectorAll('main section').forEach((s) => s.classList.toggle('on', s.id === b.dataset.tab));
+  try { localStorage.setItem('sfp-tab', b.dataset.tab); } catch {}
+  if (b.dataset.tab === 'improve' && !$('improveMd').innerHTML) loadImprove();
+  if (b.dataset.tab === 'rebuild' && !$('rbNodes').dataset.loaded) loadRbNodes();
+  if (b.dataset.tab === 'upgrade' && !$('upLine').dataset.loaded) loadUpgradeTab();
+  if (b.dataset.tab === 'nodes') { if (!mapData) loadMap(); else drawMap(); }
+  if (b.dataset.tab === 'brief' && !$('briefTxt').value) api('/api/context').then((j) => $('briefTxt').value = j.markdown).catch((e) => $('briefTxt').value = e.message);
+});
+
+async function loadOverview() {
+  const j = await api('/api/status');
+  const d = j.data;
+  const active = d.progress.next.find((x) => x.active);
+  const missing = active ? active.cost.filter((c) => c.have < c.amount).map((c) => `${c.amount - c.have} ${c.item}`).join(', ') : '';
+  $('cards').innerHTML = [
+    [`Tier ${d.progress.milestoneTier}`, `${d.save.playtimeHours} h played`],
+    [active ? active.name : '—', active ? (missing ? `missing ${missing}` : 'ready to submit!') : 'no active milestone'],
+    [d.logistics.belt.replace('Conveyor ', ''), `${d.logistics.miner} · ${d.logistics.pipe === 'not unlocked' ? 'no pipes' : d.logistics.pipe}`],
+    [`${d.power.headroomMW} MW free`, `${d.power.consumptionMW} / ${d.power.capacityMW} MW`],
+  ].map(([b, s]) => `<div class="card"><b>${esc(b)}</b><span>${esc(s)}</span></div>`).join('');
+  $('statusMd').innerHTML = md(j.markdown);
+  $('info').textContent = `${d.save.saveName} · ${d.save.sessionName}`;
+}
+async function loadImprove() {
+  try {
+    const [a, u] = await Promise.all([api('/api/improve'), api('/api/upgrades')]);
+    $('improveMd').innerHTML = md(a.markdown) + md(u.markdown);
+  } catch (e) { showErr($('improveMd'), e); }
+}
+/** Checkbox list of nodes near the HUB (used by the Plan and Rebuild tabs). */
+async function loadNodePicker(containerId, cls) {
+  const el = $(containerId);
+  try {
+    const j = await api('/api/nodes', { onlyFree: false, maxDistance: 400, limit: 25 });
+    el.dataset.loaded = '1';
+    el.classList.remove('hint');
+    el.innerHTML = j.data.map((n) => `<div class="row"><label style="min-width:0;color:var(--text)"><input type="checkbox" class="${cls}" value="${esc(n.id)}"> ${esc(n.resource)} · <b>${esc(n.purity)}</b> · ${esc(n.where)}${n.occupied ? ' · <i>your miner</i>' : ''}</label></div>`).join('') || 'No nodes within 400 m.';
+    // keep nodes picked on the map
+    if (mapData) for (const id of picked) { const n = mapData.nodes.find((x) => x.id === id); if (n) syncPicked(n); }
+  } catch (e) { showErr(el, e); }
+}
+const loadRbNodes = () => loadNodePicker('rbNodes', 'rbNode');
+const GOAL_HINTS = {
+  milestones: 'The tool adds up what your next milestones and Space Elevator phase still need (minus storage) and picks the rates that finish all of it fastest from your nodes.',
+  active: 'Like above, but only for the milestone you have selected in the HUB.',
+  items: 'Pick the items; leave the amount blank and the tool makes as much as your nodes allow (the mix follows what your milestones need). You can still type an amount for some of them.',
+  targets: 'Type how many per minute you want of each item.',
+};
+function syncGoalMode() {
+  const g = $('goalMode').value;
+  // item modes always show at least one row to type into
+  if ((g === 'items' || g === 'targets') && !document.querySelector('#targets .target')) addTarget();
+  $('targetsWrap').style.display = g === 'milestones' || g === 'active' ? 'none' : '';
+  $('maxRow').style.display = g === 'targets' ? '' : 'none';
+  $('goalHint').textContent = GOAL_HINTS[g];
+  document.querySelectorAll('#targets .target input[type=number]').forEach((i) => { i.placeholder = g === 'items' ? 'auto' : '/min'; });
+}
+$('goalMode').onchange = syncGoalMode;
+async function loadItems() {
+  const j = await api('/api/items');
+  $('itemsList').innerHTML = j.data.map((x) => `<option value="${esc(x.name)}">${x.unlocked ? '' : '🔒 locked'}</option>`).join('');
+}
+async function init() {
+  const saves = (await api('/api/saves')).data;
+  $('save').innerHTML = saves.map((s) => `<option value="${esc(s.path)}">${esc(s.name)} — ${s.modified.slice(0, 16).replace('T', ' ')}</option>`).join('');
+  await refresh();
+  try { const t = localStorage.getItem('sfp-tab'); if (t) document.querySelector(`#tabs button[data-tab="${t}"]`)?.click(); } catch {}
+}
+async function refresh() {
+  mapData = null;
+  picked.clear();
+  try { await loadOverview(); $('improveMd').innerHTML = ''; $('briefTxt').value = ''; await loadItems(); await loadNodePicker('planNodes', 'planNode'); $('rbNodes').dataset.loaded = ''; $('upLine').dataset.loaded = ''; }
+  catch (e) { showErr($('statusMd'), e); $('info').textContent = 'Could not load save'; }
+}
+$('loadBtn').onclick = async () => {
+  document.body.classList.add('busy');
+  try { await api('/api/load', { save: $('save').value }); await refresh(); } catch (e) { showErr($('statusMd'), e); }
+  document.body.classList.remove('busy');
+};
+
+function addTarget(item = '', rate = '') {
+  const div = document.createElement('div');
+  div.className = 'row target';
+  div.innerHTML = `<input type="text" list="itemsList" placeholder="item, e.g. Reinforced Iron Plate" value="${esc(item)}"><input type="number" min="0" step="0.5" placeholder="/min" value="${esc(rate)}"><button title="remove">✕</button>`;
+  div.querySelector('button').onclick = () => { div.remove(); if (typeof syncGoalMode === 'function') syncGoalMode(); };
+  $('targets').appendChild(div);
+}
+$('addTarget').onclick = (e) => { e.preventDefault(); addTarget(); syncGoalMode(); };
+addTarget('Reinforced Iron Plate', '');
+addTarget('Iron Plate', '');
+syncGoalMode();
+
+function request() {
+  const g = $('goalMode').value;
+  // blank amount = automatic
+  const targets = g === 'milestones' || g === 'active' ? [] : [...document.querySelectorAll('#targets .target')]
+    .map((d) => ({ item: d.children[0].value.trim(), rate: Number(d.children[1].value) || undefined }))
+    .filter((t) => t.item && (t.rate > 0 || g === 'items' || g === 'targets'));
+  const nodes = [...document.querySelectorAll('.planNode:checked')].map((c) => c.value);
+  return {
+    goal: g,
+    targets,
+    nodes: nodes.length ? nodes : undefined,
+    rebuild: $('planRebuild').checked,
+    maximize: g === 'targets' ? $('maximize').value.trim() || undefined : undefined,
+    useAlternates: $('alts').checked,
+    allowOverclock: $('oc').checked,
+    allowLocked: $('locked').checked,
+    resources: $('resources').value,
+    maxNodeDistance: Number($('distance').value) || undefined,
+  };
+}
+function area() {
+  const floors = $('floors').value;
+  return { mode: $('mode').value, width: Number($('width').value) || undefined, length: Number($('length').value) || undefined, unit: $('unit').value, floors: floors === 'auto' ? 'auto' : Number(floors), blueprint: $('bp').checked };
+}
+function showResult(el, j) {
+  const url = j.data?.url;
+  el.innerHTML = (url ? `<div class="row"><a href="${esc(url)}" target="_blank" style="color:var(--accent2)">Open sketch in a new tab ↗</a></div>` : '') + `<div class="md">${md(j.markdown)}</div>` + (url ? `<iframe src="${esc(url)}"></iframe>` : '');
+}
+// ---------------------------------------------------------------- node map
+const RES_COLOR = { 'Iron Ore': '#a3b1c2', 'Copper Ore': '#e07b39', Limestone: '#efe3c2', Coal: '#5b6170', 'Caterium Ore': '#f2c94c', 'Raw Quartz': '#e879f9', Sulfur: '#d9f99d', Bauxite: '#c2410c', Uranium: '#4ade80', SAM: '#a78bfa', 'Crude Oil': '#1f2937', 'Nitrogen Gas': '#7dd3fc', Water: '#38bdf8', Geyser: '#f87171', Unknown: '#6b7280' };
+const PUR_R = { pure: 7, normal: 5, impure: 3.5, unknown: 4 };
+let mapData = null;
+let mapView = null;
+const mapOff = new Set(['Water', 'Geyser', 'Nitrogen Gas']);
+const picked = new Set();
+async function loadMap() {
+  try {
+    mapData = (await api('/api/map')).data;
+    $('mapFilters').innerHTML = Object.entries(mapData.counts).sort((a, b) => b[1] - a[1]).map(([r, n]) => `<span class="mf ${mapOff.has(r) ? 'off' : ''}" data-r="${esc(r)}"><i style="background:${RES_COLOR[r] || '#888'};${r === 'Crude Oil' ? 'border:1px solid #ddd' : ''}"></i>${esc(r)} ${n}</span>`).join('');
+    document.querySelectorAll('.mf').forEach((el) => el.onclick = () => { const r = el.dataset.r; mapOff.has(r) ? mapOff.delete(r) : mapOff.add(r); el.classList.toggle('off'); drawMap(); });
+    viewHub();
+    drawMap();
+  } catch (e) { showErr($('mapSel'), e); }
+}
+function viewHub() { const c = mapData.hub || mapData.player || { x: 0, y: 0 }; mapView = { cx: c.x, cy: c.y, span: 1400 }; }
+function viewAll() {
+  const xs = mapData.nodes.map((n) => n.x), ys = mapData.nodes.map((n) => n.y);
+  const svg = $('map'); const aspect = svg.clientHeight / Math.max(1, svg.clientWidth);
+  const w = Math.max(...xs) - Math.min(...xs), h = Math.max(...ys) - Math.min(...ys);
+  mapView = { cx: (Math.max(...xs) + Math.min(...xs)) / 2, cy: (Math.max(...ys) + Math.min(...ys)) / 2, span: Math.max(w, h / aspect) * 1.06 };
+}
+const niceStep = (v) => { const p = Math.pow(10, Math.floor(Math.log10(v))); return [1, 2, 2.5, 5, 10].map((k) => k * p).find((s) => s >= v) || 10 * p; };
+function drawMap() {
+  if (!mapData || !mapView) return;
+  const svg = $('map');
+  const W = svg.clientWidth || 800, H = svg.clientHeight || 500;
+  const vw = mapView.span, vh = vw * (H / W);
+  const x0 = mapView.cx - vw / 2, y0 = mapView.cy - vh / 2;
+  const px = vw / W; // metres per pixel
+  svg.setAttribute('viewBox', `${x0} ${y0} ${vw} ${vh}`);
+  const out = [];
+  const grid = niceStep(vw / 6);
+  for (let gx = Math.ceil(x0 / grid) * grid; gx < x0 + vw; gx += grid) out.push(`<line x1="${gx}" y1="${y0}" x2="${gx}" y2="${y0 + vh}" stroke="#161b22" stroke-width="${px}"/>`);
+  for (let gy = Math.ceil(y0 / grid) * grid; gy < y0 + vh; gy += grid) out.push(`<line x1="${x0}" y1="${gy}" x2="${x0 + vw}" y2="${gy}" stroke="#161b22" stroke-width="${px}"/>`);
+  const hub = mapData.hub;
+  if (hub) for (const r of [100, 250, 500, 1000, 2000]) {
+    out.push(`<circle cx="${hub.x}" cy="${hub.y}" r="${r}" fill="none" stroke="#2b3442" stroke-width="${px * 1.2}" stroke-dasharray="${px * 6} ${px * 5}"/>`);
+    out.push(`<text x="${hub.x + r * 0.707 + px * 3}" y="${hub.y - r * 0.707 - px * 3}" fill="#556274" font-size="${px * 11}">${r >= 1000 ? r / 1000 + ' km' : r + ' m'}</text>`);
+  }
+  for (const l of mapData.lines) {
+    const s = px * 7;
+    out.push(`<g><rect x="${l.x - s}" y="${l.y - s}" width="${2 * s}" height="${2 * s}" transform="rotate(45 ${l.x} ${l.y})" fill="#f59e0b" stroke="#111" stroke-width="${px}"/><text x="${l.x + px * 10}" y="${l.y + px * 4}" fill="#fbbf24" font-size="${px * 11}" font-weight="700">Line ${l.line}</text></g>`);
+  }
+  const pur = $('mapPurity').value;
+  const freeOnly = $('mapFree').checked;
+  // search results: numbered cyan rings on top, everything else dimmed
+  const hitRank = new Map(searchHits.map((h, k) => [h.id, k + 1]));
+  const top = [];
+  mapData.nodes.forEach((n, i) => {
+    const rank = hitRank.get(n.id);
+    if (!rank) {
+      if (mapOff.has(n.resource)) return;
+      if (freeOnly && n.used) return;
+      if (pur === 'pure' && n.purity !== 'pure') return;
+      if (pur === 'normal' && n.purity === 'impure') return;
+    }
+    const dim = hitRank.size && !rank;
+    const r = (PUR_R[n.purity] || 4) * px;
+    const col = RES_COLOR[n.resource] || '#888';
+    const sel = picked.has(n.id);
+    if (sel) out.push(`<circle cx="${n.x}" cy="${n.y}" r="${r + px * 5}" fill="none" stroke="#facc15" stroke-width="${px * 3}"/>`);
+    const stroke = n.used ? '#ffffff' : n.resource === 'Crude Oil' ? '#9ca3af' : '#0b0d10';
+    const op = dim ? ' opacity="0.22"' : '';
+    if (n.type === 'node') out.push(`<circle data-i="${i}" cx="${n.x}" cy="${n.y}" r="${r}" fill="${col}" stroke="${stroke}" stroke-width="${px * (n.used ? 2.2 : 1)}"${op}/>`);
+    else out.push(`<rect data-i="${i}" x="${n.x - r}" y="${n.y - r}" width="${2 * r}" height="${2 * r}" fill="${col}" stroke="${stroke}" stroke-width="${px}"${op}/>`);
+    if (n.used) out.push(`<circle cx="${n.x}" cy="${n.y}" r="${px * 1.6}" fill="#111" pointer-events="none"${op}/>`);
+    if (rank) {
+      top.push(`<circle cx="${n.x}" cy="${n.y}" r="${r + px * 4}" fill="none" stroke="#22d3ee" stroke-width="${px * 2.5}" pointer-events="none"/>`);
+      top.push(`<g pointer-events="none"><circle cx="${n.x + r + px * 8}" cy="${n.y - r - px * 6}" r="${px * 8}" fill="#0e7490" stroke="#22d3ee" stroke-width="${px}"/><text x="${n.x + r + px * 8}" y="${n.y - r - px * 2}" fill="#fff" font-size="${px * 10}" font-weight="700" text-anchor="middle">${rank}</text></g>`);
+    }
+    if (n.id === flashId) top.push(`<circle cx="${n.x}" cy="${n.y}" r="${r + px * 14}" fill="none" stroke="#fff" stroke-width="${px * 3}" pointer-events="none"><animate attributeName="r" from="${r + px * 30}" to="${r + px * 8}" dur="0.8s" repeatCount="2"/></circle>`);
+  });
+  out.push(...top);
+  if (hub) out.push(`<g pointer-events="none"><path d="M${hub.x} ${hub.y - px * 12} L${hub.x + px * 10} ${hub.y - px * 2} L${hub.x + px * 7} ${hub.y - px * 2} L${hub.x + px * 7} ${hub.y + px * 9} L${hub.x - px * 7} ${hub.y + px * 9} L${hub.x - px * 7} ${hub.y - px * 2} L${hub.x - px * 10} ${hub.y - px * 2} Z" fill="#f97316" stroke="#fff" stroke-width="${px * 1.5}"/><text x="${hub.x + px * 13}" y="${hub.y + px * 5}" fill="#fdba74" font-size="${px * 13}" font-weight="700">HUB</text></g>`);
+  const pl = mapData.player;
+  if (pl && (!hub || Math.hypot(pl.x - hub.x, pl.y - hub.y) > 30 * px)) out.push(`<g pointer-events="none"><circle cx="${pl.x}" cy="${pl.y}" r="${px * 5}" fill="#22d3ee" stroke="#fff" stroke-width="${px * 1.5}"/><text x="${pl.x + px * 8}" y="${pl.y + px * 4}" fill="#67e8f9" font-size="${px * 11}">you</text></g>`);
+  svg.innerHTML = out.join('');
+  // scale bar ~ 120 px
+  const sm = niceStep(px * 120);
+  $('mapScale').style.width = `${sm / px}px`;
+  $('mapScale').textContent = sm >= 1000 ? `${sm / 1000} km` : `${sm} m`;
+}
+(function wireMap() {
+  const svg = $('map');
+  let drag = null;
+  let moved = false;
+  let raf = 0;
+  const redraw = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; drawMap(); }); };
+  svg.addEventListener('wheel', (e) => {
+    if (!mapView) return;
+    e.preventDefault();
+    const rect = svg.getBoundingClientRect();
+    const fx = (e.clientX - rect.left) / rect.width - 0.5, fy = (e.clientY - rect.top) / rect.height - 0.5;
+    const vh = mapView.span * (rect.height / rect.width);
+    const wx = mapView.cx + fx * mapView.span, wy = mapView.cy + fy * vh;
+    const k = e.deltaY > 0 ? 1.2 : 1 / 1.2;
+    mapView.span = Math.min(12000, Math.max(80, mapView.span * k));
+    mapView.cx = wx - fx * mapView.span;
+    mapView.cy = wy - fy * mapView.span * (rect.height / rect.width);
+    redraw();
+  }, { passive: false });
+  svg.addEventListener('pointerdown', (e) => { if (!mapView) return; drag = { x: e.clientX, y: e.clientY, cx: mapView.cx, cy: mapView.cy }; moved = false; svg.classList.add('drag'); svg.setPointerCapture(e.pointerId); });
+  svg.addEventListener('pointermove', (e) => {
+    const tip = $('mapTip');
+    if (drag) {
+      const k = mapView.span / svg.getBoundingClientRect().width;
+      if (Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y) > 4) moved = true;
+      mapView.cx = drag.cx - (e.clientX - drag.x) * k;
+      mapView.cy = drag.cy - (e.clientY - drag.y) * k;
+      tip.style.display = 'none';
+      return redraw();
+    }
+    const i = e.target.dataset?.i;
+    if (i === undefined) { tip.style.display = 'none'; return; }
+    const n = mapData.nodes[i];
+    const rect = $('mapWrap').getBoundingClientRect();
+    tip.innerHTML = `<b>${esc(n.resource)}</b> · ${esc(n.purity)}${n.type !== 'node' ? ` (${esc(n.type)})` : ''}<br>${esc(n.where)}${n.used ? `<br><span style="color:#fbbf24">has your ${esc(n.miner || 'miner')}</span>` : '<br><span style="color:#86efac">free</span>'}<br><span style="color:#64748b">${esc(n.id)}</span>${n.type === 'node' ? '<br><i>click to pick for planning</i>' : ''}`;
+    tip.style.display = 'block';
+    tip.style.left = `${Math.min(e.clientX - rect.left + 14, rect.width - 270)}px`;
+    tip.style.top = `${e.clientY - rect.top + 14}px`;
+  });
+  svg.addEventListener('pointerup', (e) => {
+    svg.classList.remove('drag');
+    const wasDrag = drag && moved;
+    drag = null;
+    if (wasDrag) return;
+    const i = e.target.dataset?.i;
+    if (i === undefined) return;
+    const n = mapData.nodes[i];
+    if (n.type !== 'node') return;
+    picked.has(n.id) ? picked.delete(n.id) : picked.add(n.id);
+    syncPicked(n);
+    drawMap();
+  });
+  svg.addEventListener('pointerleave', () => { $('mapTip').style.display = 'none'; });
+  window.addEventListener('resize', () => mapData && drawMap());
+  $('mapHub').onclick = () => { if (mapData) { viewHub(); drawMap(); } };
+  $('mapAll').onclick = () => { if (mapData) { viewAll(); drawMap(); } };
+  $('mapNone').onclick = () => { Object.keys(mapData?.counts || {}).forEach((r) => mapOff.add(r)); document.querySelectorAll('.mf').forEach((el) => el.classList.add('off')); drawMap(); };
+  $('mapAllRes').onclick = () => { mapOff.clear(); document.querySelectorAll('.mf').forEach((el) => el.classList.remove('off')); drawMap(); };
+  $('mapFree').onchange = drawMap;
+  $('mapPurity').onchange = drawMap;
+})();
+/** Ticks the picked node in the Plan and Rebuild node lists (adding it there if it is far away). */
+function syncPicked(n) {
+  const on = picked.has(n.id);
+  for (const [box, cls] of [['planNodes', 'planNode'], ['rbNodes', 'rbNode']]) {
+    const el = $(box);
+    let cb = [...el.querySelectorAll(`.${cls}`)].find((c) => c.value === n.id);
+    if (!cb && on) {
+      if (el.classList.contains('hint')) { el.classList.remove('hint'); el.innerHTML = ''; }
+      el.insertAdjacentHTML('afterbegin', `<div class="row"><label style="min-width:0;color:var(--text)"><input type="checkbox" class="${cls}" value="${esc(n.id)}"> ${esc(n.resource)} · <b>${esc(n.purity)}</b> · ${esc(n.where)}${n.used ? ' · <i>your miner</i>' : ''} <span class="hint">(from map)</span></label></div>`);
+      cb = el.querySelector(`.${cls}`);
+    }
+    if (cb) cb.checked = on;
+  }
+  if (searchHits.length) renderHits();
+  const list = mapData.nodes.filter((x) => picked.has(x.id)).map((x) => `${x.resource} ${x.purity} (${x.where})`);
+  $('mapSel').innerHTML = list.length
+    ? `<b>Picked for planning (${list.length}):</b> ${esc(list.join(' · '))} — now go to <a href="#" onclick="document.querySelector('#tabs button[data-tab=plan]').click();return false" style="color:var(--accent2)">Plan &amp; Design</a> or <a href="#" onclick="document.querySelector('#tabs button[data-tab=rebuild]').click();return false" style="color:var(--accent2)">Rebuild</a>.`
+    : 'Scroll to zoom, drag to move, hover a dot for details. <b>Click nodes to pick them</b> — they get ticked in the Plan &amp; Design and Rebuild tabs.';
+}
+
+async function loadUpgradeTab() {
+  try {
+    const j = await api('/api/lines');
+    const { lines, tiers } = j.data;
+    $('upLine').dataset.loaded = '1';
+    $('upLine').innerHTML = lines.map((l) => `<option value="${l.line}" ${l.miners.length ? '' : 'disabled'}>Line ${l.line} · ${esc(l.recipes.join(', '))} · ${esc(l.where)}${l.miners.length ? '' : ' (no miner)'}</option>`).join('');
+    const beltOpts = (sel) => tiers.belts.map((b) => `<option value="${b.tier}" ${b.tier === sel ? 'selected' : ''}>${esc(b.name)} — ${b.perMin}/min${b.unlocked ? ' ✓' : ` (🔒 ${esc(b.unlock)})`}</option>`).join('');
+    const minerOpts = (sel) => tiers.miners.map((x) => `<option value="${x.tier}" ${x.tier === sel ? 'selected' : ''}>${esc(x.name)}${x.unlocked ? ' ✓' : ` (🔒 ${esc(x.unlock)})`}</option>`).join('');
+    const nextBelt = Math.min(tiers.current.belt + 1, 6);
+    $('upBelt').innerHTML = beltOpts(nextBelt);
+    $('cmpBelt').innerHTML = beltOpts(nextBelt);
+    $('upMiner').innerHTML = minerOpts(tiers.current.miner);
+    $('cmpMiner').innerHTML = minerOpts(tiers.current.miner);
+  } catch (e) { showErr($('upOut'), e); }
+}
+$('upLineBtn').onclick = async () => {
+  $('upOut').innerHTML = '<p class="hint">Planning the upgrade…</p>';
+  try { $('upOut').innerHTML = `<div class="md">${md((await api('/api/upgrade-line', { line: Number($('upLine').value), beltTier: Number($('upBelt').value), minerTier: Number($('upMiner').value) })).markdown)}</div>`; } catch (e) { showErr($('upOut'), e); }
+};
+$('cmpBtn').onclick = async () => {
+  $('upOut').innerHTML = '<p class="hint">Planning both versions…</p>';
+  try { $('upOut').innerHTML = `<div class="md">${md((await api('/api/upgrade-plan', { request: request(), tiers: { beltTier: Number($('cmpBelt').value), minerTier: Number($('cmpMiner').value) } })).markdown)}</div>`; } catch (e) { showErr($('upOut'), e); }
+};
+$('rbNeeds').onclick = async () => {
+  try { $('rbOut').innerHTML = `<div class="md">${md((await api('/api/needs')).markdown)}</div>`; } catch (e) { showErr($('rbOut'), e); }
+};
+$('rbBtn').onclick = async () => {
+  $('rbOut').innerHTML = '<p class="hint">Planning the rebuild…</p>';
+  const nodes = [...document.querySelectorAll('.rbNode:checked')].map((c) => c.value);
+  const goal = $('rbGoal').value;
+  const base = request();
+  // "the targets on the Plan tab" keeps that tab's mode (typed amounts or automatic items)
+  const planGoal = ['milestones', 'active'].includes(base.goal) ? 'items' : base.goal;
+  const req = { ...base, nodes: nodes.length ? nodes : undefined, rebuild: true, goal: goal === 'targets' ? planGoal : goal === 'active' ? 'active' : 'milestones', targets: goal === 'targets' ? base.targets : [], maximize: goal === 'targets' ? base.maximize : undefined, resources: 'free-nodes' };
+  const floors = $('rbFloors').value;
+  const ar = { mode: $('rbMode').value, width: Number($('rbWidth').value) || undefined, length: Number($('rbLength').value) || undefined, unit: $('rbUnit').value, floors: floors === 'auto' ? 'auto' : Number(floors), blueprint: $('rbBp').checked };
+  const scope = { scope: $('rbScope').value, radius: Number($('rbRadius').value) || 250, includePower: $('rbPower').checked };
+  try {
+    const j = await api('/api/rebuild', { request: req, area: ar, scope });
+    if (!j.data?.guideHtml) return showResult($('rbOut'), j);
+    // visual step-by-step guide first; the full text plan and the layout sketch below it
+    const url = j.data.url;
+    const guideUrl = url ? url.replace(/index\.html$/, 'rebuild-guide.html') : null;
+    $('rbOut').innerHTML = `<h2 style="margin:18px 0 6px">Order of work</h2>${guideUrl ? `<div class="row"><a href="${esc(guideUrl)}" target="_blank" style="color:var(--accent2)">Open the guide in its own tab ↗</a></div>` : ''}${j.data.guideHtml}`
+      + `<details style="margin-top:16px"><summary style="cursor:pointer;color:var(--accent2)">Full text plan (materials, refunds, numbers)</summary><div class="md">${md(j.markdown)}</div></details>`
+      + (url ? `<h2 style="margin:18px 0 6px">Layout sketch</h2><iframe src="${esc(url)}"></iframe>` : '');
+  } catch (e) { showErr($('rbOut'), e); }
+};
+$('planBtn').onclick = async () => {
+  $('planOut').innerHTML = '<p class="hint">Planning…</p>';
+  try { $('planOut').innerHTML = `<div class="md">${md((await api('/api/plan', request())).markdown)}</div>`; } catch (e) { showErr($('planOut'), e); }
+};
+$('designBtn').onclick = async () => {
+  $('planOut').innerHTML = '<p class="hint">Designing…</p>';
+  try {
+    const j = await api('/api/design', { request: request(), area: area() });
+    const url = j.data?.url;
+    $('planOut').innerHTML = (url ? `<div class="row"><a href="${esc(url)}" target="_blank" style="color:var(--accent2)">Open sketch in a new tab ↗</a></div><iframe src="${esc(url)}"></iframe>` : '') + `<div class="md">${md(j.markdown)}</div>`;
+  } catch (e) { showErr($('planOut'), e); }
+};
+// search ↔ map: results are numbered, ringed on the map (the rest dimmed), and the table rows fly to / pick them
+let searchHits = [];
+$('nodeBtn').onclick = async () => {
+  try {
+    if (!mapData) await loadMap();
+    const res = $('nodeRes').value.trim();
+    const j = await api('/api/nodes', { resource: res || undefined, purity: $('nodePur').value || undefined, onlyFree: !$('nodeAll').checked, near: $('nodeNear').value, limit: 25 });
+    searchHits = j.data;
+    // make sure the searched resource is visible on the map
+    for (const h of searchHits) if (mapOff.has(h.resource)) { mapOff.delete(h.resource); document.querySelector(`.mf[data-r="${CSS.escape(h.resource)}"]`)?.classList.remove('off'); }
+    fitTo(searchHits.slice(0, 10));
+    drawMap();
+    renderHits();
+  } catch (e) { showErr($('nodesMd'), e); }
+};
+$('nodeRes').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('nodeBtn').click(); });
+$('nodeClear').onclick = () => { searchHits = []; $('nodesMd').innerHTML = ''; drawMap(); };
+function fitTo(list) {
+  if (!list.length || !mapData) return;
+  const pts = list.map((h) => mapData.nodes.find((n) => n.id === h.id)).filter(Boolean);
+  const ref = $('nodeNear').value === 'player' ? mapData.player : mapData.hub;
+  if (ref) pts.push(ref);
+  const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
+  const svg = $('map');
+  const aspect = svg.clientHeight / Math.max(1, svg.clientWidth);
+  const w = Math.max(...xs) - Math.min(...xs), h = Math.max(...ys) - Math.min(...ys);
+  mapView = { cx: (Math.max(...xs) + Math.min(...xs)) / 2, cy: (Math.max(...ys) + Math.min(...ys)) / 2, span: Math.max(300, Math.max(w, h / aspect) * 1.25) };
+}
+function focusNode(id) {
+  const n = mapData?.nodes.find((x) => x.id === id);
+  if (!n) return;
+  mapView = { cx: n.x, cy: n.y, span: Math.min(mapView?.span || 600, 600) };
+  flashId = id;
+  drawMap();
+  $('mapWrap').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  setTimeout(() => { flashId = null; drawMap(); }, 1600);
+}
+let flashId = null;
+function renderHits() {
+  if (!searchHits.length) { $('nodesMd').innerHTML = '<p class="hint">No nodes match.</p>'; return; }
+  const rows = searchHits.map((h, k) => {
+    const on = picked.has(h.id);
+    return `<tr data-id="${esc(h.id)}" style="cursor:pointer"><td><span class="hitnum">${k + 1}</span></td><td><i class="dot" style="background:${RES_COLOR[h.resource] || '#888'}"></i>${esc(h.resource)}</td><td>${esc(h.purity)}</td><td class="n">${h.distM} m</td><td>${esc(h.where)}</td><td>${h.occupied ? '<span style="color:#fbbf24">your miner</span>' : '<span style="color:#86efac">free</span>'}</td><td><button class="pickBtn ${on ? 'primary' : ''}" data-id="${esc(h.id)}">${on ? '✓ Picked' : 'Pick'}</button></td></tr>`;
+  }).join('');
+  $('nodesMd').innerHTML = `<div class="md"><p class="hint">${searchHits.length} result(s) — numbered the same on the map. Click a row to fly to it; <b>Pick</b> uses it in Plan &amp; Design / Rebuild.</p><table><tr><th>#</th><th>Resource</th><th>Purity</th><th>Distance</th><th>Where</th><th>Status</th><th></th></tr>${rows}</table></div>`;
+  $('nodesMd').querySelectorAll('tr[data-id]').forEach((tr) => tr.onclick = (e) => { if (!e.target.classList.contains('pickBtn')) focusNode(tr.dataset.id); });
+  $('nodesMd').querySelectorAll('.pickBtn').forEach((b) => b.onclick = () => {
+    const n = mapData.nodes.find((x) => x.id === b.dataset.id);
+    if (!n) return;
+    picked.has(n.id) ? picked.delete(n.id) : picked.add(n.id);
+    syncPicked(n);
+    drawMap();
+  });
+}
+$('itemBtn').onclick = async () => {
+  try { $('itemMd').innerHTML = md((await api('/api/item', { item: $('itemQ').value })).markdown); } catch (e) { showErr($('itemMd'), e); }
+};
+$('copyBrief').onclick = () => { $('briefTxt').select(); navigator.clipboard?.writeText($('briefTxt').value); };
+init().catch((e) => showErr($('statusMd'), e));
+</script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "pioneer-planner": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["C:/path/to/pioneer-planner/src/mcp/server.js"]
+    }
+  }
+}

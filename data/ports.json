@@ -1,0 +1,675 @@
+{
+ "Build_MinerMk1_C": {
+  "Output0": {
+   "x": 0,
+   "y": 800,
+   "z": 100,
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "samples": 4
+  }
+ },
+ "Build_SmelterMk1_C": {
+  "Input0": {
+   "x": 0,
+   "y": -300,
+   "z": 100,
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "samples": 182
+  },
+  "Output2": {
+   "x": 0,
+   "y": 200,
+   "z": 100,
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "samples": 182
+  }
+ },
+ "Build_ConstructorMk1_C": {
+  "Output0": {
+   "x": 0,
+   "y": 300,
+   "z": 100,
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "samples": 224
+  },
+  "Input0": {
+   "x": 0,
+   "y": -300,
+   "z": 100,
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "samples": 212
+  }
+ },
+ "Build_StorageContainerMk1_C": {
+  "Input0": {
+   "x": 0,
+   "y": -400,
+   "z": 100,
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "samples": 15
+  },
+  "Output1": {
+   "x": 0,
+   "y": 400,
+   "z": 100,
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "samples": 5
+  }
+ },
+ "Build_ConveyorAttachmentSplitter_C": {
+  "Input1": {
+   "x": -100,
+   "y": 0,
+   "z": 0,
+   "dir": [
+    1,
+    0,
+    0
+   ],
+   "samples": 785
+  },
+  "Output1": {
+   "x": 100,
+   "y": 0,
+   "z": 0,
+   "dir": [
+    1,
+    0,
+    0
+   ],
+   "samples": 668
+  },
+  "Output2": {
+   "x": 0,
+   "y": 100,
+   "z": 0,
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "samples": 356
+  },
+  "Output3": {
+   "x": 0,
+   "y": -100,
+   "z": 0,
+   "dir": [
+    0,
+    -1,
+    0
+   ],
+   "samples": 256
+  }
+ },
+ "Build_ConveyorAttachmentMerger_C": {
+  "Input1": {
+   "x": -100,
+   "y": 0,
+   "z": 0,
+   "dir": [
+    1,
+    0,
+    0
+   ],
+   "samples": 505
+  },
+  "Input3": {
+   "x": 0,
+   "y": -100,
+   "z": 0,
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "samples": 330
+  },
+  "Output1": {
+   "x": 100,
+   "y": 0,
+   "z": 0,
+   "dir": [
+    1,
+    0,
+    0
+   ],
+   "samples": 586
+  },
+  "Input2": {
+   "x": 0,
+   "y": 100,
+   "z": 0,
+   "dir": [
+    0,
+    -1,
+    0
+   ],
+   "samples": 252
+  }
+ },
+ "Build_GeneratorBiomass_Automated_C": {
+  "Input0": {
+   "x": 0,
+   "y": 300,
+   "z": 100,
+   "dir": [
+    0,
+    -1,
+    0
+   ],
+   "samples": 6
+  }
+ },
+ "Build_AssemblerMk1_C": {
+  "Output0": {
+   "x": 0,
+   "y": 500,
+   "z": 100,
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "samples": 123
+  },
+  "Input1": {
+   "x": -200,
+   "y": -600,
+   "z": 100,
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "samples": 25
+  },
+  "Input0": {
+   "x": 200,
+   "y": -600,
+   "z": 100,
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "samples": 96
+  }
+ },
+ "Build_FoundryMk1_C": {
+  "Input1": {
+   "x": -200,
+   "y": -300,
+   "z": 100,
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "samples": 34
+  },
+  "Output2": {
+   "x": -200,
+   "y": 200,
+   "z": 100,
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "samples": 40
+  },
+  "Input0": {
+   "x": 200,
+   "y": -300,
+   "z": 100,
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "samples": 8
+  }
+ },
+ "Build_MinerMk2_C": {
+  "Output0": {
+   "x": 0,
+   "y": 800,
+   "z": 100,
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "samples": 34
+  }
+ },
+ "Build_TruckStation_C": {
+  "Input1": {
+   "x": 300,
+   "y": -1005,
+   "z": 100,
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "samples": 9
+  },
+  "Output0": {
+   "x": -300,
+   "y": -1006,
+   "z": 100,
+   "dir": [
+    0,
+    -1,
+    0
+   ],
+   "samples": 15
+  },
+  "Output1": {
+   "x": -300,
+   "y": -1006,
+   "z": 300,
+   "dir": [
+    0,
+    -1,
+    0
+   ],
+   "samples": 1
+  },
+  "Input2": {
+   "x": 300,
+   "y": -1005,
+   "z": 300,
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "samples": 1
+  },
+  "Input0": {
+   "x": 700,
+   "y": -1005,
+   "z": 100,
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "samples": 8
+  }
+ },
+ "Build_ConveyorAttachmentSplitterSmart_C": {
+  "Input1": {
+   "x": -100,
+   "y": 0,
+   "z": 0,
+   "dir": [
+    1,
+    0,
+    0
+   ],
+   "samples": 52
+  },
+  "Output1": {
+   "x": 100,
+   "y": 0,
+   "z": 0,
+   "dir": [
+    1,
+    0,
+    0
+   ],
+   "samples": 44
+  },
+  "Output2": {
+   "x": 0,
+   "y": 100,
+   "z": 0,
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "samples": 20
+  },
+  "Output3": {
+   "x": 0,
+   "y": -100,
+   "z": 0,
+   "dir": [
+    0,
+    -1,
+    0
+   ],
+   "samples": 17
+  }
+ },
+ "Build_ResourceSink_C": {
+  "Input0": {
+   "x": 0,
+   "y": 500,
+   "z": 100,
+   "dir": [
+    0,
+    -1,
+    0
+   ],
+   "samples": 9
+  }
+ },
+ "Build_CentralStorage_C": {
+  "Input0": {
+   "x": 0,
+   "y": 390,
+   "z": 100,
+   "dir": [
+    0,
+    -1,
+    0
+   ],
+   "samples": 8
+  }
+ },
+ "Build_StorageContainerMk2_C": {
+  "Output1": {
+   "x": 0,
+   "y": 400,
+   "z": 100,
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "samples": 27
+  },
+  "Input0": {
+   "x": 0,
+   "y": -400,
+   "z": 100,
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "samples": 25
+  },
+  "Output2": {
+   "x": 0,
+   "y": 400,
+   "z": 500,
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "samples": 15
+  },
+  "Input1": {
+   "x": 0,
+   "y": -400,
+   "z": 500,
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "samples": 16
+  }
+ },
+ "Build_ConveyorAttachmentMergerPriority_C": {
+  "Output1": {
+   "x": 100,
+   "y": 0,
+   "z": 0,
+   "dir": [
+    1,
+    0,
+    0
+   ],
+   "samples": 3
+  },
+  "Input3": {
+   "x": 0,
+   "y": -100,
+   "z": 0,
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "samples": 1
+  },
+  "Input2": {
+   "x": 0,
+   "y": 100,
+   "z": 0,
+   "dir": [
+    0,
+    -1,
+    0
+   ],
+   "samples": 3
+  },
+  "Input1": {
+   "x": -100,
+   "y": 0,
+   "z": 0,
+   "dir": [
+    1,
+    0,
+    0
+   ],
+   "samples": 2
+  }
+ },
+ "Build_OilRefinery_C": {
+  "Input0": {
+   "x": 200,
+   "y": 900,
+   "z": 100,
+   "dir": [
+    0,
+    -1,
+    0
+   ],
+   "samples": 17
+  }
+ },
+ "Build_Packager_C": {
+  "Input0": {
+   "x": 0,
+   "y": -300,
+   "z": 100,
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "samples": 1
+  }
+ },
+ "Build_ConveyorAttachmentSplitterProgrammable_C": {
+  "Input1": {
+   "x": -100,
+   "y": 0,
+   "z": 0,
+   "dir": [
+    1,
+    0,
+    0
+   ],
+   "samples": 2
+  },
+  "Output3": {
+   "x": 0,
+   "y": -100,
+   "z": 0,
+   "dir": [
+    0,
+    -1,
+    0
+   ],
+   "samples": 2
+  },
+  "Output1": {
+   "x": 100,
+   "y": 0,
+   "z": 0,
+   "dir": [
+    1,
+    0,
+    0
+   ],
+   "samples": 2
+  }
+ },
+ "Build_ManufacturerMk1_C": {
+  "Input0": {
+   "x": 600,
+   "y": -875,
+   "z": 100,
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "samples": 6
+  },
+  "Output0": {
+   "x": 0,
+   "y": 800,
+   "z": 100,
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "samples": 8
+  },
+  "Input3": {
+   "x": -600,
+   "y": -875,
+   "z": 100,
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "samples": 2
+  }
+ },
+ "Build_ConveyorAttachmentSplitterLift_C": {
+  "Output1": {
+   "x": 0,
+   "y": -100,
+   "z": 0,
+   "dir": [
+    0,
+    -1,
+    0
+   ],
+   "samples": 9
+  },
+  "Output2": {
+   "x": 0,
+   "y": 100,
+   "z": 0,
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "samples": 6
+  }
+ },
+ "Build_ConveyorAttachmentMergerLift_C": {
+  "Input1": {
+   "x": 0,
+   "y": -100,
+   "z": 0,
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "samples": 12
+  },
+  "Input2": {
+   "x": 0,
+   "y": 100,
+   "z": 0,
+   "dir": [
+    0,
+    -1,
+    0
+   ],
+   "samples": 9
+  }
+ },
+ "Build_TrainDockingStation_C": {
+  "Input1": {
+   "x": -300,
+   "y": 1600,
+   "z": 500,
+   "dir": [
+    0,
+    -1,
+    0
+   ],
+   "samples": 12
+  },
+  "Input0": {
+   "x": -300,
+   "y": 1600,
+   "z": 100,
+   "dir": [
+    0,
+    -1,
+    0
+   ],
+   "samples": 12
+  },
+  "Output0": {
+   "x": 300,
+   "y": 1600,
+   "z": 100,
+   "dir": [
+    0,
+    1,
+    0
+   ],
+   "samples": 6
+  }
+ }
+}

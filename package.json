@@ -1,0 +1,28 @@
+{
+  "name": "pioneer-planner",
+  "version": "0.1.0",
+  "description": "Save-aware factory planner for Satisfactory: reads your save, plans with your unlocks, belts and nodes, draws build sketches, step-by-step rebuild guides and blueprints. Works standalone (web UI / CLI) or with Claude or any MCP-capable AI.",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "keywords": ["satisfactory", "factory", "planner", "calculator", "save-parser", "blueprint", "mcp", "claude"],
+  "bin": {
+    "sfp": "bin/sfp.js"
+  },
+  "scripts": {
+    "web": "node src/web/server.js",
+    "mcp": "node src/mcp/server.js",
+    "cli": "node bin/sfp.js",
+    "test": "node test/smoke.js",
+    "test:mcp": "node test/mcp-smoke.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@etothepii/satisfactory-file-parser": "^4.1.2",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "yalps": "^0.6.4",
+    "zod": "^4.6.7"
+  }
+}

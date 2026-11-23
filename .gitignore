@@ -1,0 +1,23 @@
+# dependencies
+node_modules/
+
+# generated per machine — derived from YOUR game install and saves, never publish
+cache/
+output/
+
+# local settings (paths on your PC)
+sfp.config.json
+.mcp.json
+.claude/
+
+# save files / blueprints should never end up in the repo
+*.sav
+*.sbp
+*.sbpcfg
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/
