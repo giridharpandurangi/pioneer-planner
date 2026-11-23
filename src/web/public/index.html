@@ -289,7 +289,8 @@ async function loadItems() {
 }
 async function init() {
   const saves = (await api('/api/saves')).data;
-  $('save').innerHTML = saves.map((s) => `<option value="${esc(s.path)}">${esc(s.name)} — ${s.modified.slice(0, 16).replace('T', ' ')}</option>`).join('');
+  // first choice = always the newest save, so a fresh in-game save shows up by itself
+  $('save').innerHTML = `<option value="">⟳ Newest save (follows your game)</option>` + saves.map((s) => `<option value="${esc(s.path)}">${esc(s.name)} — ${s.modified.slice(0, 16).replace('T', ' ')}</option>`).join('');
   await refresh();
   const qp = new URLSearchParams(location.search);
   if (qp.get('tab')) return deepLink(qp);

@@ -5,7 +5,8 @@ import { listSaves } from '../config.js';
 import { loadGameData } from '../gamedata/loader.js';
 import { buildModel, parseSaveFile } from '../save/model.js';
 
-const state = { gd: null, model: null, file: null, mtime: null };
+// pinned = the player picked a specific save; otherwise we always follow the newest save (so a fresh in-game save shows up by itself)
+const state = { gd: null, model: null, file: null, mtime: null, pinned: false };
 
 export function gameData() {
   if (!state.gd) state.gd = loadGameData();
@@ -28,8 +29,10 @@ export function resolveSave(query) {
   return hit.path;
 }
 
+/** query: a save name/path pins that save; '' follows the newest save; undefined keeps the current mode. */
 export function loadSave(query, { force = false } = {}) {
   const file = resolveSave(query);
+  if (query !== undefined) state.pinned = !!query;
   const mtime = fs.statSync(file).mtimeMs;
   if (!force && state.model && state.file === file && state.mtime === mtime) return state.model;
   const gd = gameData();
@@ -40,10 +43,12 @@ export function loadSave(query, { force = false } = {}) {
   return state.model;
 }
 
-/** Returns the loaded model, loading the newest save on first use. Reloads automatically if the file changed. */
+/** The save to work on: the newest one (unless the player pinned a save). Re-reads it whenever the file changes. */
 export function currentModel() {
-  if (!state.file) return loadSave();
+  if (!state.file || !state.pinned) return loadSave();
   return loadSave(state.file);
 }
+
+export const followsNewest = () => !state.pinned;
 
 export function hasModel() { return !!state.model; }

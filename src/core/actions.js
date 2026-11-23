@@ -26,7 +26,8 @@ export function savesAction() {
 }
 
 export function loadAction(query) {
-  const m = loadSave(query, { force: true });
+  // no save given = follow the newest save from now on
+  const m = loadSave(query || '', { force: true });
   const a = analyze(m, gameData());
   return { data: { file: m.file, header: m.header }, markdown: fmt.loaded(m, a) };
 }

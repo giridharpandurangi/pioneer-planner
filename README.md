@@ -25,7 +25,7 @@ It works three ways:
 | Mode | How |
 |---|---|
 | **With Claude (or any MCP AI)** | MCP server: the AI scans your save, suggests improvements, asks what you want, plans, and hands over the sketch |
-| **Web UI, no AI** | `npm run web` → http://localhost:5178 |
+| **Web UI, no AI** | double-click **Pioneer Planner** (Desktop shortcut), or `npm run web` → http://localhost:5178 |
 | **Command line** | `node bin/sfp.js …` |
 
 All data comes from your machine:
@@ -41,18 +41,32 @@ All data comes from your machine:
 
 ---
 
-## Setup
+## Install (no tech needed, Windows)
 
-Requires **Node.js 20+** and the game installed (Steam or Epic, auto-detected).
+1. **Install Node.js** (free) from [nodejs.org](https://nodejs.org/en/download): pick the **LTS** version and keep the default options. This is the only thing you install.
+2. **Download Pioneer Planner:** on this page, click the green **Code** button → **Download ZIP**. Right-click the ZIP → **Properties** → tick **Unblock** → OK, then extract it, e.g. to `Documents\pioneer-planner`.
+3. **Double-click `Pioneer Planner.cmd`** in that folder.
+   - The first time, it downloads what it needs (about a minute) and asks whether to add **Pioneer Planner** to your Desktop and Start menu. Say yes.
+   - It opens in its own window.
+
+**After that:** just click **Pioneer Planner** on your Desktop.
+- It always shows your **newest save**, so save in-game and press **F5** in the planner to refresh.
+- It runs quietly in the background and stops when you log off or shut down. To stop it earlier, use Start menu → **Stop Pioneer Planner**.
+- If Windows shows "Windows protected your PC" the first time, click **More info → Run anyway**. This is normal for scripts downloaded from the internet, and the scripts in `launcher/` are short and readable.
+
+Requires the game installed (Steam or Epic, found automatically).
+
+### Developer setup
 
 ```powershell
 git clone https://github.com/giridharpandurangi/pioneer-planner.git
 cd pioneer-planner
 npm install
 npm test
+npm run web
 ```
 
-Saves are found automatically in `%LOCALAPPDATA%\FactoryGame\Saved\SaveGames\<id>\`. The newest save is used unless you pick one.
+Saves are found automatically in `%LOCALAPPDATA%\FactoryGame\Saved\SaveGames\<id>\`. The newest save is used (it follows new saves automatically) unless you pick a specific one.
 If the game or saves are somewhere unusual, create `sfp.config.json`:
 
 ```json
@@ -217,7 +231,8 @@ src/rebuild/             dismantle refunds, material balance, staged rebuild ord
 src/analysis/upgrade.js  upgrade options for existing miners/lines
 src/blueprint/           .sbp writer, learned port geometry, templates, verifier, preview
 data/                    learned port positions + blueprint object templates
-tools/                   learn.js (learn from big saves), screenshots.js (README images), dump helpers
+launcher/                one-click start/stop scripts, Desktop/Start-menu shortcuts, app icon
+tools/                   learn.js (learn from big saves), screenshots.js (README images), make-icon.js, dump helpers
 docs/screenshots/        README images
 src/core/                shared actions + markdown formatting
 src/mcp/server.js        MCP server
