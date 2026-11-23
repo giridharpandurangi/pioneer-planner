@@ -12,7 +12,7 @@
 |---|---|
 | **Your factory at a glance.** Tier, active milestone, belts, power, every miner and machine, all read from your save. ![Overview](docs/screenshots/overview.png) | **Node map + search.** Every node from your save, sized by purity; results are numbered on the map, and you click to pick nodes for planning. ![Node map](docs/screenshots/node-map.png) |
 | **Visual rebuild guide.** Craft first, then dismantle (100% refund), build a small stage 1 and let it run, then the rest. ![Rebuild guide](docs/screenshots/rebuild-guide.png) | **Layout sketch.** Machine rows with splitter/merger manifolds, a belt corridor, and every belt within your belt tier. ![Layout sketch](docs/screenshots/layout-sketch.png) |
-| **Upgrade planner.** What a line becomes with Mk.2 belts or miners: extra output, machines to add, exact belts to swap, and the cost after refunds. ![Upgrade](docs/screenshots/upgrade-line.png) | |
+| **Upgrade planner.** What a line becomes with Mk.2 belts or miners: extra output, machines to add, exact belts to swap, and the cost after refunds. ![Upgrade](docs/screenshots/upgrade-line.png) | **Blueprints.** Pick “3 smelters” (or any recipe, count or output rate) and get a checked in-game blueprint with a preview, ready to install. ![Blueprints](docs/screenshots/blueprints.png) |
 
 It's a local tool that reads **your own save file**. It knows exactly what you have unlocked, where your miners are, which free nodes exist (with purity), and how your belts are connected. It then:
 
@@ -36,7 +36,7 @@ All data comes from your machine:
 
 - **Nothing leaves your PC.** The tool makes no network requests: no telemetry, no accounts, no uploads.
 - It only **reads** your saves and the game's Docs file. It only **writes** inside its own `output/` and `cache/` folders. The one exception is blueprint install (`--install`), which copies `.sbp` files into the game's blueprint folder, and only when you ask.
-- The web UI listens on `127.0.0.1` only. It refuses requests from other websites, only loads saves from your save folders, and can't install into the game folder.
+- The web UI listens on `127.0.0.1` only. It refuses requests from other websites and only loads saves from your save folders. Its *Install into the game* button only copies blueprints the planner made (from `output/`) into an existing blueprint folder or your save's session folder, and never overwrites a blueprint.
 - `output/` (your sketches) and `cache/` (data derived from your game install and saves) are git-ignored and should never be published. The shipped `data/` files contain only building geometry: no names, account IDs or save names.
 
 ---
@@ -52,6 +52,7 @@ All data comes from your machine:
 **After that:** just click **Pioneer Planner** on your Desktop.
 - It always shows your **newest save**, so save in-game and press **F5** in the planner to refresh.
 - It runs quietly in the background and stops when you log off or shut down. To stop it earlier, use Start menu → **Stop Pioneer Planner**.
+- After an update (new ZIP or `git pull`), clicking it restarts the planner on the new version by itself.
 - If Windows shows "Windows protected your PC" the first time, click **More info → Run anyway**. This is normal for scripts downloaded from the internet, and the scripts in `launcher/` are short and readable.
 
 Requires the game installed (Steam or Epic, found automatically).
@@ -103,7 +104,9 @@ Then just talk to it, e.g.:
 
 - "My base is temporary, I want to rebuild it with the 3 iron nodes near the HUB" (or the **rebuild_base** prompt)
 
-**Tools the AI gets:** `list_saves`, `load_save`, `factory_status`, `suggest_improvements`, `get_unlocks`, `find_nodes`, `item_info`, `plan_production`, `design_factory`, `milestone_needs`, `plan_rebuild`, `upgrade_options`, `export_context`.
+- "Make me a blueprint of 3 smelters on iron ingots" / "a blueprint for 60 screws a minute"
+
+**Tools the AI gets:** `list_saves`, `load_save`, `factory_status`, `suggest_improvements`, `get_unlocks`, `find_nodes`, `item_info`, `plan_production`, `design_factory`, `milestone_needs`, `plan_rebuild`, `make_blueprint`, `list_lines`, `upgrade_line`, `compare_upgrade`, `upgrade_options`, `export_context`.
 
 ## Rebuild planner (replacing temporary builds)
 
@@ -139,15 +142,26 @@ Works for tiers you haven't unlocked yet, so you can plan ahead. Web: the **Upgr
 
 ## In-game blueprints (.sbp)
 
-Add `--blueprint` to `design` / `rebuild` (or tick *blueprint* in the web UI). You get one blueprint per floor, containing:
+The web UI's **Blueprints** tab makes them from four sources:
+
+| Source | What you get |
+|---|---|
+| **Machine module** | Quick picks like *2 Smelters · Iron Ingot*, *3 Smelters*, *4 Constructors · Screw*, *2 Assemblers · Rotor*, or **custom**: any recipe (alternates too) by number of machines + clock, or by output per minute (fewest machines, evenly underclocked). Choose the belt tier and the gap between machines. |
+| **From Plan & Design** | the factory you set up on the Plan & Design tab (one blueprint per floor) |
+| **From Rebuild: whole factory** | the new factory from the Rebuild tab |
+| **From Rebuild: stage 1 only** | just the small first line the rebuild guide tells you to build first |
+
+Each blueprint contains:
 - machines with their recipe and clock speed already set;
 - every splitter and merger;
-- belts connected end to end.
+- belts connected end to end. The belts that feed the module and carry its output **end in the open**, ready for you to connect. If one belt can't carry it all (90 ore/min on Mk.1), you get two feed belts, and the summary says so.
 
-Each file is re-read after writing to check that every belt connection is valid.
+Every file is re-read after writing to check that each belt connection is valid. You get a top-down preview drawn from the file itself, its size in metres and foundations, and which Blueprint Designer it fits (Mk.1 32 m, Mk.2 40 m, Mk.3 48 m). Download the `.sbp` + `.sbpcfg`, or press **Install into the game**.
+
+CLI: `node bin/sfp.js blueprint module "Iron Ingot" --machines 3` (also `--rate 90`, `--clock 80`, `--belt 2`, `--gap 2`, `--name "…"`, `--install "Session"`), `blueprint plan "Iron Plate:30"`, `blueprint rebuild`, `blueprint stage1`. You can still add `--blueprint` to `design` / `rebuild`. AI: `make_blueprint`.
 
 - **Unlock needed:** blueprints need the **FICSIT Blueprints** milestone (Tier 4) in-game. Until then, build from the sketch.
-- **Install:** copy the `.sbp` + `.sbpcfg` into `%LOCALAPPDATA%\FactoryGame\Saved\SaveGames\blueprints\<session name>\`, or add `--install "<session name>"`. **Try a new blueprint in a test save first**: the files are built from objects your own game wrote, but they haven't been placed in-game yet.
+- **Install:** press *Install into the game* in the web UI, add `--install "<session name>"`, or copy the `.sbp` + `.sbpcfg` into `%LOCALAPPDATA%\FactoryGame\Saved\SaveGames\blueprints\<session name>\`. Load your save again so the game sees new files. Blueprints made this way have been placed in-game successfully; still, try a big one in a test save first.
 - **Not included:** foundations, power poles and lines, lifts (multi-floor belts end where a lift goes), miners and pipes.
 - **Port positions** come from real belts in your saves (`data/ports.json`). To teach it buildings you haven't belted yet, run `node tools/learn.js "<a save that has them>"` once.
 
@@ -167,7 +181,7 @@ The web UI's **Nodes** tab has a map of every resource node in your save:
 
 It's a schematic map without the game's terrain picture, which isn't available outside the game files.
 
-**Deep links** open a view directly, for example `http://localhost:5178/?tab=nodes&q=Iron%20Ore&purity=pure` or `?tab=upgrade&line=1&belt=2`.
+**Deep links** open a view directly, for example `http://localhost:5178/?tab=nodes&q=Iron%20Ore&purity=pure`, `?tab=upgrade&line=1&belt=2` or `?tab=blueprints&recipe=Iron%20Ingot&machines=3&run=1`.
 
 ## Command line
 
@@ -184,6 +198,8 @@ node bin/sfp.js plan "Computer:1" --locked
 node bin/sfp.js needs
 node bin/sfp.js rebuild --nearest 3 --node-res "Iron Ore" --mode foundation --width 12 --length 16 --unit foundations
 node bin/sfp.js design "Reinforced Iron Plate:5" --blueprint
+node bin/sfp.js blueprint module "Iron Ingot" --machines 3 --install "New Game"
+node bin/sfp.js blueprint module "Screw" --rate 120 --belt 2
 node bin/sfp.js upgrades
 node bin/sfp.js help
 ```
@@ -229,7 +245,7 @@ src/layout/              layout engine + SVG/HTML renderer
 src/planner/goals.js     milestone needs + "finish them fastest" planning
 src/rebuild/             dismantle refunds, material balance, staged rebuild order
 src/analysis/upgrade.js  upgrade options for existing miners/lines
-src/blueprint/           .sbp writer, learned port geometry, templates, verifier, preview
+src/blueprint/           .sbp writer, machine modules, learned port geometry, templates, verifier, preview
 data/                    learned port positions + blueprint object templates
 launcher/                one-click start/stop scripts, Desktop/Start-menu shortcuts, app icon
 tools/                   learn.js (learn from big saves), screenshots.js (README images), make-icon.js, dump helpers

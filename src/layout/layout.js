@@ -26,7 +26,8 @@ export function generateLayout(gd, plan, opts = {}, model = null) {
   if (mode === 'ground' && floorsOpt === 'auto') floorsOpt = 1;
 
   const steps = plan.steps;
-  const widestPitch = Math.max(...steps.map((s) => machinePitch(s.building)));
+  const gap = Math.max(0, Number(opts.machineGap) || 0); // extra walking space between machines (m)
+  const widestPitch = Math.max(...steps.map((s) => machinePitch(s.building))) + gap;
   let W = opts.width ? Number(opts.width) * unit : null;
   let L = opts.length ? Number(opts.length) * unit : null;
   if (mode === 'foundation') {
@@ -34,11 +35,11 @@ export function generateLayout(gd, plan, opts = {}, model = null) {
     if (L) L = ceilTo(L, FOUNDATION);
   }
 
-  let busW = 8;
+  let busW = opts.module ? 2 : 8; // a stand-alone module needs no belt corridor
   let result;
   for (let iter = 0; iter < 6; iter++) {
     const width = W ?? ceilTo(busW + 2 + Math.min(maxPerRowOpt, Math.max(...steps.map((s) => s.machines))) * widestPitch + 2, mode === 'foundation' ? FOUNDATION : 2);
-    result = buildOnce({ gd, plan, steps, width, length: L, busW, floorsOpt, maxPerRowOpt, capFor, mode });
+    result = buildOnce({ gd, plan, steps, width, length: L, busW, floorsOpt, maxPerRowOpt, capFor, mode, gap });
     const needed = ceilTo(result.trackCount * LANE_SPACING + 4, 2);
     if (needed <= busW) break;
     busW = needed;
@@ -227,14 +228,14 @@ function lanesForSink(conns, lanes, sinkIdx) {
   return c ? lanes.find((l) => l.source === c.source)?.x ?? 0 : 0;
 }
 
-function buildOnce({ gd, plan, steps, width, length, busW, floorsOpt, maxPerRowOpt, capFor }) {
+function buildOnce({ gd, plan, steps, width, length, busW, floorsOpt, maxPerRowOpt, capFor, gap = 0 }) {
   const x0 = busW + 2;
   const rows = [];
   let tooNarrow = null;
   // 1) chunk steps into rows that fit the width
   for (const s of steps) {
     const fp = footprint(s.building);
-    const pitch = machinePitch(s.building);
+    const pitch = machinePitch(s.building) + gap;
     const fit = Math.floor((width - x0 - 2) / pitch);
     if (fit < 1) tooNarrow = { name: s.buildingName, minWidth: ceilTo(x0 + pitch + 2, FOUNDATION) };
     const perRow = Math.max(1, Math.min(fit, maxPerRowOpt));

@@ -340,7 +340,7 @@ function stagedBuild(gd, design, need, balance, model, request = {}) {
       if (fits(cost)) {
         const stillShort = Math.max(0, (need[c.item] || 0) - (availOf(c.item) - (cost[c.item] || 0)));
         const minutes = stillShort / rate;
-        return {
+        return withFullPlan(p, {
           steps: p.steps.map((s) => `${s.recipeName} ×${s.machines}${Math.abs(s.clockPercent - 100) > 0.01 ? ` @ ${s.clockPercent}%` : ''}`),
           machines,
           cost: toList(gd, cost),
@@ -353,12 +353,15 @@ function stagedBuild(gd, design, need, balance, model, request = {}) {
             steps: p.steps.map((s) => ({ recipe: s.recipeName, building: s.buildingName, buildingId: s.building, machines: s.machines, clock: s.clockPercent, inputs: s.inputs, outputs: s.outputs })),
             nodes: p.nodes.map((n) => ({ name: n.name, purity: n.purity, building: n.building, rate: n.rate, where: n.where, kind: n.kind })),
           },
-        };
+        });
       }
       rate *= 0.75;
     }
   }
   return null;
 }
+
+/** Attaches the full stage-1 plan without putting it into JSON output. */
+const withFullPlan = (plan, obj) => Object.defineProperty(obj, 'fullPlan', { value: plan, enumerable: false });
 
 const toList = (gd, o) => Object.entries(o).filter(([, v]) => v > 0).map(([k, v]) => ({ item: k, name: itemName(gd, k), amount: Math.floor(v) })).sort((a, b) => b.amount - a.amount);

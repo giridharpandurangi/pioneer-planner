@@ -1,6 +1,6 @@
 // Captures README screenshots of the running web UI with a headless Edge/Chrome.
 //   1. npm run web            (in another terminal)
-//   2. node tools/screenshots.js [<output folder name for the rebuild guide + sketch>]
+//   2. node tools/screenshots.js [<output folder name for the rebuild guide + sketch>]   (SFP_SHOTS=blueprints to take only some)
 // Writes docs/screenshots/*.png. Uses a throw-away browser profile.
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -27,9 +27,10 @@ const shots = [
   { name: 'node-map', url: '/?tab=nodes&q=Iron%20Ore&purity=pure', size: [1400, 960] },
   { name: 'plan-automatic', url: `/?tab=plan&goal=milestones&nodes=${nodes}&rebuild=1&run=plan`, size: [1400, 1250] },
   { name: 'upgrade-line', url: '/?tab=upgrade&line=1&belt=2&miner=1', size: [1400, 1350] },
+  { name: 'blueprints', url: '/?tab=blueprints&recipe=Iron%20Ingot&machines=3&belt=1&run=1', size: [1300, 1620] },
   designDir && { name: 'rebuild-guide', url: `/output/${designDir}/rebuild-guide.html`, size: [1100, 2350] },
   designDir && { name: 'layout-sketch', url: `/output/${designDir}/index.html`, size: [1250, 1500] },
-].filter(Boolean);
+].filter(Boolean).filter((s) => !process.env.SFP_SHOTS || process.env.SFP_SHOTS.split(',').includes(s.name)); // SFP_SHOTS=blueprints,overview: only those
 
 fs.mkdirSync(OUT, { recursive: true });
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'sfp-shot-'));

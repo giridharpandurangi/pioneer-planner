@@ -41,6 +41,15 @@ main{max-width:1240px;margin:0 auto;padding:16px 18px 80px}section{display:none}
 iframe{width:100%;height:80vh;border:1px solid var(--line);border-radius:8px;background:#14171c}
 .err{background:#3b1515;border:1px solid #7f1d1d;border-radius:8px;padding:8px 12px;margin:8px 0}.busy{opacity:.6;pointer-events:none}
 textarea{width:100%;height:60vh}.hint{color:var(--muted);font-size:12px}
+.srcs{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px;margin-bottom:12px}
+.src{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px;cursor:pointer;text-align:left}
+.src b{display:block;color:var(--text)}.src span{color:var(--muted);font-size:12px}.src.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.presets{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 8px}.presets button{font-size:13px}.presets button.on{border-color:var(--accent);color:var(--accent)}
+.presets button.locked{opacity:.45}
+.bpcard{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:12px 0}
+.bpcard h3{margin:0 0 4px;font-size:16px}.bpfacts{display:flex;flex-wrap:wrap;gap:6px 16px;color:var(--muted);font-size:13px;margin:4px 0 10px}.bpfacts b{color:var(--text)}
+.pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line)}.pill.ok{color:var(--ok);border-color:#2f5d3a}.pill.bad{color:var(--bad);border-color:#7f1d1d}.pill.mid{color:var(--mid);border-color:#78501a}
+a.btn{display:inline-block;text-decoration:none;color:var(--text);background:#232a35;border:1px solid var(--line);border-radius:6px;padding:6px 10px}a.btn:hover{filter:brightness(1.15)}
 </style>
 </head>
 <body>
@@ -54,6 +63,7 @@ textarea{width:100%;height:60vh}.hint{color:var(--muted);font-size:12px}
   <button data-tab="improve">Improvements</button>
   <button data-tab="plan">Plan &amp; Design</button>
   <button data-tab="rebuild">Rebuild</button>
+  <button data-tab="blueprints">Blueprints</button>
   <button data-tab="upgrade">Upgrade</button>
   <button data-tab="nodes">Nodes</button>
   <button data-tab="item">Item lookup</button>
@@ -117,6 +127,44 @@ textarea{width:100%;height:60vh}.hint{color:var(--muted);font-size:12px}
     </div>
     <div id="rbOut"></div>
   </section>
+  <section id="blueprints">
+    <p class="hint">Make in-game blueprints (.sbp): a ready machine module like “3 smelters”, or the factory from your Plan or Rebuild. Every blueprint is re-read after writing to check it, and gets a top-down preview of exactly what the game will place.</p>
+    <div id="bpStatus" class="hint"></div>
+    <div class="srcs" id="bpSrcs">
+      <button class="src on" data-src="module"><b>🧱 Machine module</b><span>2 smelters, 3 smelters, … or your own recipe and count</span></button>
+      <button class="src" data-src="plan"><b>📐 From Plan &amp; Design</b><span>what you set on the Plan &amp; Design tab</span></button>
+      <button class="src" data-src="rebuild"><b>🏗 From Rebuild: whole factory</b><span>the new factory from the Rebuild tab</span></button>
+      <button class="src" data-src="stage1"><b>① From Rebuild: stage 1 only</b><span>the small first line that makes the missing parts</span></button>
+    </div>
+    <div class="form" id="bpModule">
+      <fieldset style="grid-column:1/-1"><legend>Quick picks</legend><div class="presets" id="bpPresets"></div></fieldset>
+      <fieldset><legend>Recipe</legend>
+        <div class="row"><input type="text" id="bpRecipe" list="bpRecipeList" placeholder="recipe or item, e.g. Iron Ingot" style="flex:1"></div>
+        <div class="hint">Type a recipe (alternates too) or just an item.</div>
+      </fieldset>
+      <fieldset><legend>How big</legend>
+        <div class="row"><label>Size by</label><select id="bpBy"><option value="count">number of machines</option><option value="rate">output per minute</option></select></div>
+        <div class="row" id="bpCountRow"><label>Machines</label><input type="number" id="bpMachines" min="1" max="40" value="3" style="width:70px"><label style="min-width:0">clock</label><input type="number" id="bpClock" min="1" max="250" value="100" style="width:70px"> %</div>
+        <div class="row" id="bpRateRow" style="display:none"><label>Output</label><input type="number" id="bpRate" min="1" step="0.5" placeholder="/min" style="width:90px"> /min <span class="hint">(fewest machines, evenly underclocked)</span></div>
+      </fieldset>
+      <fieldset><legend>Belts &amp; spacing</legend>
+        <div class="row"><label>Belts</label><select id="bpBelt"></select></div>
+        <div class="row"><label>Gap between machines</label><select id="bpGap"><option value="0">none (tight)</option><option value="1">1 m</option><option value="2">2 m</option><option value="4">4 m (walk between)</option></select></div>
+      </fieldset>
+    </div>
+    <div class="form" id="bpFrom" style="display:none"><fieldset style="grid-column:1/-1"><legend>Settings</legend><div id="bpFromHint" class="hint"></div></fieldset></div>
+    <div class="form">
+      <fieldset><legend>Name &amp; make</legend>
+        <div class="row"><label>Blueprint name</label><input type="text" id="bpName" maxlength="60" placeholder="auto, e.g. 3x Iron Ingot" style="flex:1"></div>
+        <div class="row"><button id="bpMake" class="primary">Make blueprint</button></div>
+      </fieldset>
+      <fieldset><legend>Put it in the game</legend>
+        <div class="row"><label>Save (session)</label><select id="bpSession"></select></div>
+        <div class="hint">The game lists blueprints per session name. After installing, load your save again so the game sees them, then open the build menu → <b>Blueprints</b>.</div>
+      </fieldset>
+    </div>
+    <div id="bpOut"></div>
+  </section>
   <section id="upgrade">
     <p class="hint">See what better belts and miners give you — also for tiers you have not unlocked yet, so you can plan ahead.</p>
     <div class="form">
@@ -168,6 +216,7 @@ textarea{width:100%;height:60vh}.hint{color:var(--muted);font-size:12px}
   </section>
 </main>
 <datalist id="itemsList"></datalist>
+<datalist id="bpRecipeList"></datalist>
 <datalist id="rawList"><option>Iron Ore</option><option>Copper Ore</option><option>Limestone</option><option>Coal</option><option>Caterium Ore</option><option>Raw Quartz</option><option>Sulfur</option><option>Bauxite</option><option>Uranium</option><option>Crude Oil</option><option>SAM</option><option>Nitrogen Gas</option><option>Water</option></datalist>
 <script>
 const $ = (id) => document.getElementById(id);
@@ -230,6 +279,7 @@ document.querySelectorAll('#tabs button').forEach((b) => b.onclick = () => {
   if (b.dataset.tab === 'improve' && !$('improveMd').innerHTML) loadImprove();
   if (b.dataset.tab === 'rebuild' && !$('rbNodes').dataset.loaded) loadRbNodes();
   if (b.dataset.tab === 'upgrade' && !$('upLine').dataset.loaded) loadUpgradeTab();
+  if (b.dataset.tab === 'blueprints' && !bpOpts) loadBpTab();
   if (b.dataset.tab === 'nodes') { if (!mapData) loadMap(); else drawMap(); }
   if (b.dataset.tab === 'brief' && !$('briefTxt').value) api('/api/context').then((j) => $('briefTxt').value = j.markdown).catch((e) => $('briefTxt').value = e.message);
 });
@@ -335,6 +385,20 @@ async function deepLink(qp) {
       if (cb) cb.checked = true;
     }
     if (qp.get('run') === '1') await $('rbBtn').onclick();
+  } else if (tab === 'blueprints') {
+    // ?tab=blueprints&recipe=Iron%20Ingot&machines=3&run=1 · &rate=90 · &belt=2 · &gap=2 · &src=plan|rebuild|stage1
+    for (let i = 0; i < 100 && !bpOpts; i++) await new Promise((r) => setTimeout(r, 100));
+    const src = qp.get('src');
+    if (src) document.querySelector(`#bpSrcs .src[data-src="${CSS.escape(src)}"]`)?.click();
+    if (qp.get('recipe')) $('bpRecipe').value = qp.get('recipe');
+    if (qp.get('machines')) { $('bpBy').value = 'count'; $('bpMachines').value = qp.get('machines'); }
+    if (qp.get('rate')) { $('bpBy').value = 'rate'; $('bpRate').value = qp.get('rate'); }
+    syncBpBy();
+    if (qp.get('belt')) $('bpBelt').value = qp.get('belt');
+    if (qp.get('gap')) $('bpGap').value = qp.get('gap');
+    const k = BP_PRESETS.findIndex(([, r, n]) => r === $('bpRecipe').value && String(n) === $('bpMachines').value && $('bpBy').value === 'count');
+    $('bpPresets').querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.k === String(k)));
+    if (qp.get('run') === '1') await $('bpMake').onclick();
   }
   const scroll = qp.get('scroll');
   if (scroll) document.querySelector(scroll)?.scrollIntoView();
@@ -342,7 +406,7 @@ async function deepLink(qp) {
 async function refresh() {
   mapData = null;
   picked.clear();
-  try { await loadOverview(); $('improveMd').innerHTML = ''; $('briefTxt').value = ''; await loadItems(); await loadNodePicker('planNodes', 'planNode'); $('rbNodes').dataset.loaded = ''; $('upLine').dataset.loaded = ''; }
+  try { await loadOverview(); $('improveMd').innerHTML = ''; $('briefTxt').value = ''; await loadItems(); await loadNodePicker('planNodes', 'planNode'); $('rbNodes').dataset.loaded = ''; $('upLine').dataset.loaded = ''; bpOpts = null; if ($('blueprints').classList.contains('on')) loadBpTab(); }
   catch (e) { showErr($('statusMd'), e); $('info').textContent = 'Could not load save'; }
 }
 $('loadBtn').onclick = async () => {
@@ -583,8 +647,8 @@ $('cmpBtn').onclick = async () => {
 $('rbNeeds').onclick = async () => {
   try { $('rbOut').innerHTML = `<div class="md">${md((await api('/api/needs')).markdown)}</div>`; } catch (e) { showErr($('rbOut'), e); }
 };
-$('rbBtn').onclick = async () => {
-  $('rbOut').innerHTML = '<p class="hint">Planning the rebuild…</p>';
+/** Request / area / scope from the Rebuild tab (also used by the Blueprints tab). */
+function rbBody() {
   const nodes = [...document.querySelectorAll('.rbNode:checked')].map((c) => c.value);
   const goal = $('rbGoal').value;
   const base = request();
@@ -594,8 +658,12 @@ $('rbBtn').onclick = async () => {
   const floors = $('rbFloors').value;
   const ar = { mode: $('rbMode').value, width: Number($('rbWidth').value) || undefined, length: Number($('rbLength').value) || undefined, unit: $('rbUnit').value, floors: floors === 'auto' ? 'auto' : Number(floors), blueprint: $('rbBp').checked };
   const scope = { scope: $('rbScope').value, radius: Number($('rbRadius').value) || 250, includePower: $('rbPower').checked };
+  return { request: req, area: ar, scope };
+}
+$('rbBtn').onclick = async () => {
+  $('rbOut').innerHTML = '<p class="hint">Planning the rebuild…</p>';
   try {
-    const j = await api('/api/rebuild', { request: req, area: ar, scope });
+    const j = await api('/api/rebuild', rbBody());
     if (!j.data?.guideHtml) return showResult($('rbOut'), j);
     // visual step-by-step guide first; the full text plan and the layout sketch below it
     const url = j.data.url;
@@ -671,6 +739,118 @@ function renderHits() {
     drawMap();
   });
 }
+// ---------------------------------------------------------------- blueprints
+const BP_PRESETS = [
+  ['2 Smelters', 'Iron Ingot', 2], ['3 Smelters', 'Iron Ingot', 3], ['4 Smelters', 'Iron Ingot', 4], ['3 Smelters', 'Copper Ingot', 3],
+  ['3 Constructors', 'Iron Plate', 3], ['2 Constructors', 'Iron Rod', 2], ['4 Constructors', 'Screw', 4], ['3 Constructors', 'Wire', 3],
+  ['2 Constructors', 'Cable', 2], ['3 Constructors', 'Concrete', 3], ['2 Assemblers', 'Reinforced Iron Plate', 2], ['2 Assemblers', 'Rotor', 2],
+  ['2 Assemblers', 'Modular Frame', 2], ['2 Foundries', 'Steel Ingot', 2],
+];
+let bpOpts = null;
+let bpSrc = 'module';
+async function loadBpTab() {
+  try {
+    const d = (await api('/api/bp-options')).data;
+    bpOpts = d;
+    $('bpRecipeList').innerHTML = d.recipes.map((r) => `<option value="${esc(r.name)}">${esc(r.building || '')}${r.alternate ? ' · alternate' : ''}${r.unlocked ? '' : ' · 🔒 locked'}</option>`).join('');
+    $('bpBelt').innerHTML = d.belts.map((b) => `<option value="${b.tier}" ${b.tier === d.bestBelt ? 'selected' : ''}>${esc(b.name)} (${b.perMin}/min)${b.unlocked ? '' : ' 🔒'}</option>`).join('');
+    $('bpSession').innerHTML = d.sessions.map((s) => `<option ${s === d.session ? 'selected' : ''}>${esc(s)}</option>`).join('');
+    const has = new Map(d.recipes.map((r) => [r.name, r.unlocked]));
+    $('bpPresets').innerHTML = BP_PRESETS.map(([label, recipe], k) => `<button data-k="${k}" class="${has.get(recipe) === false ? 'locked' : ''}" title="${has.get(recipe) === false ? 'not unlocked in this save yet' : ''}">${esc(label)} · ${esc(recipe)}</button>`).join('') + '<button data-k="custom">✎ Custom…</button>';
+    $('bpPresets').querySelectorAll('button').forEach((b) => b.onclick = () => {
+      $('bpPresets').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+      if (b.dataset.k === 'custom') { $('bpRecipe').value = ''; $('bpRecipe').focus(); return; }
+      const [, recipe, n] = BP_PRESETS[Number(b.dataset.k)];
+      $('bpRecipe').value = recipe; $('bpBy').value = 'count'; $('bpMachines').value = n; $('bpClock').value = 100; syncBpBy();
+    });
+    $('bpStatus').innerHTML = d.blueprintsUnlocked
+      ? `✅ This save has blueprints unlocked. Session: <b>${esc(d.session)}</b>.`
+      : `⚠ This save (session <b>${esc(d.session)}</b>) has not unlocked blueprints yet — milestone <b>FICSIT Blueprints</b>, Tier 4. You can still make them now and install them for later.`;
+    if (!$('bpRecipe').value) $('bpPresets').querySelector('button[data-k="1"]')?.click();
+  } catch (e) { showErr($('bpStatus'), e); }
+}
+function syncBpBy() {
+  const rate = $('bpBy').value === 'rate';
+  $('bpCountRow').style.display = rate ? 'none' : '';
+  $('bpRateRow').style.display = rate ? '' : 'none';
+}
+$('bpBy').onchange = syncBpBy;
+const BP_FROM_HINT = {
+  plan: 'Uses everything set on the <b>Plan &amp; Design</b> tab: how much, items, nodes, rules and build area (each floor becomes its own blueprint). <a href="#" data-go="plan">Open Plan &amp; Design</a>',
+  rebuild: 'Uses the <b>Rebuild</b> tab: nodes, goal and build area. This is the whole new factory — often bigger than a Blueprint Designer; each result says whether it fits. <a href="#" data-go="rebuild">Open Rebuild</a>',
+  stage1: 'Only the small <b>stage 1</b> line from your rebuild: it runs on the miner you keep and makes the parts you are short of. Uses the Rebuild tab settings. <a href="#" data-go="rebuild">Open Rebuild</a>',
+};
+$('bpSrcs').querySelectorAll('.src').forEach((b) => b.onclick = () => {
+  bpSrc = b.dataset.src;
+  $('bpSrcs').querySelectorAll('.src').forEach((x) => x.classList.toggle('on', x === b));
+  $('bpModule').style.display = bpSrc === 'module' ? '' : 'none';
+  $('bpFrom').style.display = bpSrc === 'module' ? 'none' : '';
+  $('bpFromHint').innerHTML = BP_FROM_HINT[bpSrc] || '';
+  $('bpFromHint').querySelectorAll('a[data-go]').forEach((a) => a.onclick = (e) => { e.preventDefault(); document.querySelector(`#tabs button[data-tab=${a.dataset.go}]`).click(); });
+  if (bpSrc !== 'module' && bpSrc !== 'plan' && !$('rbNodes').dataset.loaded) loadRbNodes();
+});
+function bpBody() {
+  const name = $('bpName').value.trim() || undefined;
+  if (bpSrc === 'module') {
+    const byRate = $('bpBy').value === 'rate';
+    return {
+      source: 'module',
+      name,
+      module: {
+        recipe: $('bpRecipe').value.trim(),
+        machines: byRate ? undefined : Number($('bpMachines').value) || 1,
+        clock: byRate ? undefined : Number($('bpClock').value) || 100,
+        rate: byRate ? Number($('bpRate').value) || undefined : undefined,
+        beltTier: Number($('bpBelt').value) || undefined,
+        gap: Number($('bpGap').value) || 0,
+      },
+    };
+  }
+  if (bpSrc === 'plan') return { source: 'plan', name, request: request(), area: { ...area(), blueprint: true } };
+  return { source: bpSrc, name, ...rbBody() };
+}
+$('bpMake').onclick = async () => {
+  const body = bpBody();
+  if (body.source === 'module' && !body.module.recipe) return showErr($('bpOut'), 'Pick a quick pick or type a recipe first.');
+  if (body.source === 'module' && $('bpBy').value === 'rate' && !body.module.rate) return showErr($('bpOut'), 'Type how much per minute you want.');
+  $('bpOut').innerHTML = `<p class="hint">${body.source === 'module' ? 'Making the blueprint…' : 'Planning and making the blueprint (this can take a few seconds)…'}</p>`;
+  $('bpMake').disabled = true;
+  try { renderBlueprints(await api('/api/blueprint', body)); } catch (e) { showErr($('bpOut'), e); }
+  $('bpMake').disabled = false;
+};
+function renderBlueprints(j) {
+  const d = j.data;
+  if (!d?.blueprints) { $('bpOut').innerHTML = `<div class="md">${md(j.markdown)}</div>`; return; }
+  const many = d.blueprints.length > 1;
+  const cards = d.blueprints.map((b) => {
+    const fit = b.designer.fits
+      ? `<span class="pill ok">fits a ${esc(b.designer.name.replace('Blueprint Designer ', 'Designer '))} (${b.designer.side} m)</span>`
+      : '<span class="pill mid" title="The biggest Blueprint Designer is Mk.3 (48 × 48 m)">bigger than any Blueprint Designer</span>';
+    const check = b.ok ? `<span class="pill ok">✓ checked: ${b.connections} belt connections</span>` : `<span class="pill bad">✗ ${esc(b.problems.join('; '))}</span>`;
+    const st = b.stats;
+    const warn = [...b.warnings, ...(b.designer.fits ? [] : ['Bigger than the largest Blueprint Designer (Mk.3, 48 × 48 m). If the game will not place it, make it smaller: tick fewer nodes on the Plan / Rebuild tab, or build it from machine modules.'])];
+    return `<div class="bpcard">
+      <h3>${esc(b.name)}${many ? ` <span class="hint">· floor ${b.floor}</span>` : ''}</h3>
+      <div class="bpfacts"><span><b>${b.sizeM.x} × ${b.sizeM.y} m</b> (${b.foundations.x} × ${b.foundations.y} foundations)</span><span><b>${st.machines}</b> machines</span><span><b>${st.attachments}</b> splitters/mergers</span><span><b>${st.beltMetres} m</b> belts</span>${fit}${check}</div>
+      ${warn.length ? `<div class="md"><div class="note" style="border-left-color:var(--mid);background:#2a2415;border-color:#5c4a1a">${warn.map(esc).join('<br>')}</div></div>` : ''}
+      ${b.preview ? `<div>${b.preview}</div><div class="hint">Top view, north up. Blue = machines, yellow = splitters, green = mergers, orange = belts; red / green dots = inputs / outputs. Belts that end in the open are where you connect your supply and take the output.</div>` : '<p class="hint">Too big to draw here — open the layout sketch.</p>'}
+      <div class="row" style="margin-top:8px"><a class="btn" href="${esc(b.sbpUrl)}" download>⬇ ${esc(b.name)}.sbp</a><a class="btn" href="${esc(b.cfgUrl)}" download>⬇ .sbpcfg</a><span class="hint">(the game needs both files)</span></div>
+    </div>`;
+  }).join('');
+  const okFiles = d.blueprints.filter((b) => b.ok).map((b) => b.file);
+  const notes = (d.notes || []).filter(Boolean);
+  $('bpOut').innerHTML = `<div class="md"><p><b>${esc(d.summary)}</b></p>${notes.length ? `<div class="note">${notes.map(esc).join('<br>')}</div>` : ''}</div>
+    <div class="row"><button id="bpInstall" class="primary" ${okFiles.length ? '' : 'disabled'}>Install into the game</button><span class="hint">into session “<b id="bpInstallTo"></b>” (change it above)</span>${d.sketchUrl ? `<a class="btn" href="${esc(d.sketchUrl)}" target="_blank">Open layout sketch ↗</a>` : ''}</div>
+    <div id="bpInstallOut"></div>${cards}`;
+  $('bpInstallTo').textContent = $('bpSession').value;
+  $('bpInstall').onclick = async () => {
+    try {
+      const r = await api('/api/blueprint-install', { files: okFiles, session: $('bpSession').value });
+      $('bpInstallOut').innerHTML = `<div class="md">${md(r.markdown)}</div>`;
+    } catch (e) { showErr($('bpInstallOut'), e); }
+  };
+}
+$('bpSession').onchange = () => { if ($('bpInstallTo')) $('bpInstallTo').textContent = $('bpSession').value; };
 $('itemBtn').onclick = async () => {
   try { $('itemMd').innerHTML = md((await api('/api/item', { item: $('itemQ').value })).markdown); } catch (e) { showErr($('itemMd'), e); }
 };

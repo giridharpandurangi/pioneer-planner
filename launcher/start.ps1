@@ -14,6 +14,28 @@ function Test-Running {
   try { return (Invoke-WebRequest -Uri ($url + 'api/saves') -UseBasicParsing -TimeoutSec 2).StatusCode -eq 200 } catch { return $false }
 }
 
+function Get-Health {
+  try { return (Invoke-RestMethod -Uri ($url + 'api/health') -TimeoutSec 2).data } catch { return $null }
+}
+
+# an older copy still running (e.g. after an update): restart it so the new version opens
+if (Test-Running) {
+  $health = Get-Health
+  $newest = (Get-ChildItem -Path (Join-Path $root 'src') -Recurse -File | Measure-Object -Property LastWriteTimeUtc -Maximum).Maximum
+  $started = if ($health) { [DateTimeOffset]::FromUnixTimeMilliseconds([int64]$health.started).UtcDateTime } else { [datetime]::MinValue }
+  if ($newest -gt $started) {
+    & (Join-Path $PSScriptRoot 'stop.ps1') -Quiet
+    if ($health) { Stop-Process -Id ([int]$health.pid) -Force -ErrorAction SilentlyContinue }
+    # copies from before the health check: stop the node process that holds the planner's port
+    $owner = (Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1).OwningProcess
+    if ($owner -and (Get-Process -Id $owner -ErrorAction SilentlyContinue).ProcessName -eq 'node') { Stop-Process -Id $owner -Force -ErrorAction SilentlyContinue }
+    for ($i = 0; $i -lt 20 -and (Test-Running); $i++) { Start-Sleep -Milliseconds 250 }
+    if (Test-Running) {
+      Show-Message "An older Pioneer Planner is still running and could not be closed, so you may see the old version.`n`nRestart your PC (or end 'Node.js' in Task Manager) and start Pioneer Planner again." 'Warning' | Out-Null
+    }
+  }
+}
+
 if (-not (Test-Running)) {
   # 1. Node.js is the only thing the planner needs
   $node = (Get-Command node -ErrorAction SilentlyContinue).Source

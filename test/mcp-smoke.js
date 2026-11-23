@@ -31,6 +31,10 @@ const d = await call('design_factory', { targets: [{ item: 'Reinforced Iron Plat
 const ok = !d.isError && /Sketch:/.test(d.content[0].text);
 const dir = d.content[0].text.match(/layout\.json in (.+)\)/)?.[1];
 if (dir && fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
+const bp = await call('make_blueprint', { source: 'module', recipe: 'Iron Ingot', machines: 3, name: 'MCP smoke module' });
+const bpOk = !bp.isError && /checked: \d+ belt connections all valid/.test(bp.content[0].text);
+const bpFile = bp.content[0].text.match(/^\s+(.+\.sbp)$/m)?.[1];
+if (bpFile) fs.rmSync(path.dirname(path.dirname(bpFile)), { recursive: true, force: true });
 await client.close();
-console.log(ok ? '\nMCP smoke test passed' : '\nMCP smoke test FAILED');
-process.exit(ok ? 0 : 1);
+console.log(ok && bpOk ? '\nMCP smoke test passed' : '\nMCP smoke test FAILED');
+process.exit(ok && bpOk ? 0 : 1);

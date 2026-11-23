@@ -57,8 +57,17 @@ function knownSave(save) {
   if (!hit) throw new Error('Unknown save — pick one from the list.');
   return hit.path;
 }
-/** Installing blueprints into the game folder is a CLI / AI-tool option only, never from the browser. */
+/**
+ * Design / rebuild requests never install. Blueprints go into the game folder only through /api/blueprint-install:
+ * files the planner made (inside output/, .sbp), into an existing blueprint folder or this save's session, never overwriting.
+ */
 const noInstall = (area = {}) => { const { installSession, ...rest } = area; void installSession; return rest; };
+
+function knownSession(session) {
+  const known = A.blueprintOptionsAction().data.sessions;
+  if (!known.includes(session)) throw new Error('Unknown blueprint folder — pick one from the list.');
+  return session;
+}
 
 function itemsList() {
   const gd = gameData();
@@ -77,7 +86,11 @@ function itemsList() {
   return [...out].map(([name, unlockedFlag]) => ({ name, unlocked: unlockedFlag })).sort((a, b) => b.unlocked - a.unlocked || a.name.localeCompare(b.name));
 }
 
+const STARTED = Date.now();
+
 const routes = {
+  // the launcher uses this to restart an older running copy after an update
+  'GET /api/health': () => ({ data: { pid: process.pid, started: STARTED } }),
   'GET /api/saves': () => A.savesAction(),
   'POST /api/load': (b) => A.loadAction(knownSave(b.save)),
   'GET /api/status': () => A.statusAction(),
@@ -104,6 +117,9 @@ const routes = {
     if (r.data?.files) r.data.url = '/output/' + path.relative(OUTPUT_DIR, r.data.files.html).split(path.sep).join('/');
     return r;
   },
+  'GET /api/bp-options': () => A.blueprintOptionsAction(),
+  'POST /api/blueprint': (b) => A.blueprintAction({ source: b.source, module: b.module || {}, request: b.request || {}, area: noInstall(b.area), scope: b.scope || {}, name: b.name }),
+  'POST /api/blueprint-install': (b) => A.blueprintInstallAction({ files: Array.isArray(b.files) ? b.files.slice(0, 20).map(String) : [], session: knownSession(String(b.session || '')) }),
 };
 
 const server = http.createServer(async (req, res) => {

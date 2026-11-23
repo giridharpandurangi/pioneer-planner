@@ -7,6 +7,7 @@ import { portsFor, knownPorts } from './ports.js';
 const { Parser } = parserPkg;
 const ab = (p) => { const b = fs.readFileSync(p); return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength); };
 const yawOf = (q) => Math.atan2(2 * (q.w * q.z + q.x * q.y), 1 - 2 * (q.y * q.y + q.z * q.z));
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const rot = (x, y, a) => ({ x: x * Math.cos(a) - y * Math.sin(a), y: x * Math.sin(a) + y * Math.cos(a) });
 
 function hermite(p0, m0, p1, m1, t) {
@@ -15,7 +16,8 @@ function hermite(p0, m0, p1, m1, t) {
   return { x: h00 * p0.x + h10 * m0.x + h01 * p1.x + h11 * m1.x, y: h00 * p0.y + h10 * m0.y + h01 * p1.y + h11 * m1.y };
 }
 
-export function previewBlueprintSvg(sbpPath) {
+/** opts.recipeName(id) turns 'Recipe_IngotIron_C' into a display name. */
+export function previewBlueprintSvg(sbpPath, { maxWidth = 900, recipeName } = {}) {
   const bp = Parser.ParseBlueprintFiles('p', ab(sbpPath), ab(`${sbpPath}cfg`));
   const ports = knownPorts();
   const shapes = [];
@@ -45,19 +47,20 @@ export function previewBlueprintSvg(sbpPath) {
       .map(([x, y]) => { const r = rot(x * 100, y * 100, yaw); return { x: t.translation.x + r.x, y: t.translation.y + r.y }; });
     pts.push(...corners);
     const portDots = Object.entries(portsFor(cls, ports)).map(([n, p]) => { const r = rot(p.x, p.y, yaw); return { n, x: t.translation.x + r.x, y: t.translation.y + r.y }; });
-    const recipe = o.properties?.mCurrentRecipe?.value?.pathName?.split('.').pop()?.replace(/^Recipe_|_C$/g, '') || '';
+    const rid = o.properties?.mCurrentRecipe?.value?.pathName?.split('.').pop() || '';
+    const recipe = (rid && recipeName?.(rid)) || rid.replace(/^Recipe_|_C$/g, '');
     const clock = o.properties?.mCurrentPotential?.value;
     shapes.push({ kind: isAttach ? (/Splitter/.test(cls) ? 'splitter' : 'merger') : 'machine', corners, portDots, label: isAttach ? '' : `${recipe}${clock ? ` ${Math.round(clock * 1000) / 10}%` : ''}`, cx: t.translation.x, cy: t.translation.y });
   }
   const minX = Math.min(...pts.map((p) => p.x)) - 300, maxX = Math.max(...pts.map((p) => p.x)) + 300;
   const minY = Math.min(...pts.map((p) => p.y)) - 300, maxY = Math.max(...pts.map((p) => p.y)) + 300;
-  const S = 0.08; // px per cm
+  const S = Math.min(0.1, maxWidth / Math.max(1, maxX - minX)); // px per cm, fitted to maxWidth
   const X = (x) => (x - minX) * S, Y = (y) => (y - minY) * S; // world +Y (south) drawn downward => north up
-  const out = [`<svg xmlns="http://www.w3.org/2000/svg" width="${(maxX - minX) * S}" height="${(maxY - minY) * S}" style="background:#1b1f26;font-family:sans-serif">`];
+  const out = [`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${(maxX - minX) * S} ${(maxY - minY) * S}" width="100%" style="max-width:${Math.round((maxX - minX) * S)}px;background:#1b1f26;font-family:sans-serif;border-radius:6px">`];
   for (const s of shapes.filter((x) => x.kind !== 'belt')) {
     const fill = s.kind === 'splitter' ? '#facc15' : s.kind === 'merger' ? '#34d399' : '#3b82c4';
     out.push(`<polygon points="${s.corners.map((c) => `${X(c.x)},${Y(c.y)}`).join(' ')}" fill="${fill}" fill-opacity="${s.kind === 'machine' ? 0.5 : 0.9}" stroke="#000"/>`);
-    if (s.label) out.push(`<text x="${X(s.cx)}" y="${Y(s.cy)}" fill="#fff" font-size="10" text-anchor="middle">${s.label}</text>`);
+    if (s.label) out.push(`<text x="${X(s.cx)}" y="${Y(s.cy)}" fill="#fff" font-size="10" text-anchor="middle">${esc(s.label)}</text>`);
     for (const d of s.portDots) out.push(`<circle cx="${X(d.x)}" cy="${Y(d.y)}" r="2.5" fill="${/Input/.test(d.n) ? '#f87171' : '#a3e635'}"><title>${d.n}</title></circle>`);
   }
   for (const s of shapes.filter((x) => x.kind === 'belt')) out.push(`<polyline points="${s.line.map((p) => `${X(p.x).toFixed(1)},${Y(p.y).toFixed(1)}`).join(' ')}" fill="none" stroke="#f59e0b" stroke-width="2.5" opacity="0.85"/>`);

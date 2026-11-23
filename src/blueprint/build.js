@@ -145,7 +145,7 @@ function buildFloorScene(gd, plan, layout, floorIndex, ports) {
     if (sk.kind !== 'row' || sk.floor !== floorIndex || list.length < 2) continue;
     const mg = S.add(MERGER, W(busW - 1, sk.y, BELT_Z), EAST);
     const entry = entries.get(sinkLine(sk));
-    if (entry) { entry.pts[0] = pt(S.port(mg, 'Output1')); entry.from = { ent: mg, port: 'Output1' }; }
+    if (entry) { entry.pts[0] = pt(S.port(mg, 'Output1')); entry.from = { ent: mg, port: 'Output1' }; entry.used = true; }
     if (list.length > 3) S.warnings.add(`${sk.label}: more than 3 lanes merge into one input — connect the extra ones by hand.`);
     sinkMergers.set(k, { mg, slots: ['Input1', 'Input2', 'Input3'], used: 0 });
   }
@@ -174,6 +174,7 @@ function buildFloorScene(gd, plan, layout, floorIndex, ports) {
         } else {
           const entry = entries.get(sinkLine(sk));
           if (!entry) continue;
+          entry.used = true;
           targets.push({ y: sk.y, finish: (pts, from) => S.belt([...pts, ...entry.pts].filter(dedupe()), from, entry.to) });
         }
       } else {
@@ -195,6 +196,7 @@ function buildFloorScene(gd, plan, layout, floorIndex, ports) {
     } else if (src.kind === 'row') {
       const ex = exits.get(srcLine(src));
       if (!ex) continue;
+      ex.used = true;
       ys = src.y;
       startPts = [...ex.pts, W(x, ys, BELT_Z)];
       startFrom = ex.from;
@@ -238,7 +240,9 @@ function buildFloorScene(gd, plan, layout, floorIndex, ports) {
     else runTrunk(down, startPts, startFrom, SOUTH);
   }
 
-  // row entries that are fed directly (no corridor merger) were consumed above; entries with no feeder stay open
+  // inputs/outputs nothing on this floor connects to (e.g. a stand-alone module) get an open belt end at the edge
+  for (const entry of entries.values()) if (!entry.used) S.belt(entry.pts, null, entry.to, 'input: connect your supply here');
+  for (const ex of exits.values()) if (!ex.used) S.belt(ex.pts, ex.from, null, 'output: connect to storage or the next machines');
   return S;
 
   function pt(p) { return { x: Math.round(p.x), y: Math.round(p.y), z: Math.round(p.z) }; }

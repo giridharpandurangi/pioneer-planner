@@ -23,6 +23,11 @@ Usage: node bin/sfp.js <command> [args] [--save NAME]
   lines                         your production lines (numbered) + belt/miner tiers and how to unlock them
   upgrade-line <n> [--belt 2] [--miner 2]   full upgrade plan for an existing line (works before unlocking)
   compare [plan options] [--to-belt 2] [--to-miner 2]   same plan at your tiers vs better tiers
+  blueprint module "Recipe" --machines 3 [--clock 100 | --rate 90] [--belt 1] [--gap 2]
+                                in-game blueprint of a machine module (e.g. 3 smelters on Iron Ingot)
+  blueprint plan "Item:rate" ...   blueprint of a planned factory (same options as design)
+  blueprint rebuild | stage1    blueprint of the whole rebuild, or only its small stage 1
+                                (all: --name "My blueprint", --install "Session name")
   context                       markdown brief of your factory to paste into any AI
   web [--port 5178]             local web UI
   mcp                           MCP server on stdio (for Claude / other AI clients)
@@ -61,6 +66,7 @@ Design area:
 Examples:
   node bin/sfp.js improve
   node bin/sfp.js plan "Reinforced Iron Plate:5"
+  node bin/sfp.js blueprint module "Iron Ingot" --machines 3 --install "New Game"
   node bin/sfp.js design "Modular Frame:5" --width 10 --length 12 --unit foundations --floors 2 --open
 `;
 
@@ -150,6 +156,19 @@ async function main() {
       const req = request();
       delete req.beltTier;
       return out(A.upgradePlanAction(req, { beltTier: opts['to-belt'] && Number(opts['to-belt']), minerTier: opts['to-miner'] && Number(opts['to-miner']) }));
+    }
+    case 'blueprint': {
+      const source = pos.shift() || 'module';
+      const installSession = typeof opts.install === 'string' ? opts.install : undefined;
+      const name = typeof opts.name === 'string' ? opts.name : undefined;
+      const num = (v) => (v === undefined || v === true ? undefined : Number(v));
+      const dis = opts.dismantle;
+      const scope = { scope: dis && /^[\d,]+$/.test(String(dis)) ? String(dis).split(',').map(Number) : dis || 'near', radius: num(opts.radius), includePower: !!opts['dismantle-power'] };
+      const r = source === 'module'
+        ? A.blueprintAction({ source, name, installSession, module: { recipe: pos.join(' '), machines: num(opts.machines), clock: num(opts.clock), rate: num(opts.rate), beltTier: num(opts.belt), gap: num(opts.gap) } })
+        : A.blueprintAction({ source, name, installSession, request: { ...request(), rebuild: source !== 'plan' || !!opts.rebuild }, area: area(), scope });
+      out(r);
+      return openFile(r.data?.sketchUrl && r.data.blueprints?.[0] ? path.join(ROOT, 'output', r.data.blueprints[0].file.split('/')[0], 'index.html') : null);
     }
     case 'rebuild': {
       const dis = opts.dismantle;

@@ -9,8 +9,10 @@ import { guidePage, renderGuide } from '../rebuild/guide.js';
 import { upgradeOptions } from '../analysis/upgrade.js';
 import { comparePlans, listLines, tierChoices, upgradeLine } from '../upgrade/upgrade.js';
 import { verifyBlueprint } from '../blueprint/verify.js';
+import { previewBlueprintSvg } from '../blueprint/preview.js';
+import { modulePlan } from '../blueprint/module.js';
 import { OUTPUT_DIR, ensureDir, listSaves } from '../config.js';
-import { itemName, recipeRates, resolveItem } from '../gamedata/loader.js';
+import { isFluid, itemName, recipeRates, resolveItem } from '../gamedata/loader.js';
 // (resolveItem / itemName are also used by resolvePlan for automatic amounts)
 import { analyze, nextUnlocks } from '../analysis/analyze.js';
 import { planProduction } from '../planner/plan.js';
@@ -178,28 +180,141 @@ function blueprintsFor(gd, plan, layout, dir, m, installSession) {
     notes.push('This save has not unlocked blueprints yet (milestone "FICSIT Blueprints", Tier 4). Until then, build from the sketch — the blueprint files are ready for later or for another save.');
   }
   let installed = null;
-  if (installSession) {
-    // a session name is a single folder name: no separators, no "..", no drive letters
-    const name = String(installSession).trim();
-    if (!name || name.length > 100 || /[\\/:*?"<>|\x00-\x1f]/.test(name) || name === '.' || name === '..' || /^\.+$/.test(name)) {
-      throw new Error(`"${installSession}" is not a valid session name (use the save's session name, e.g. "New Game").`);
-    }
-    const root = path.resolve(gameBlueprintRoot());
-    const target = path.resolve(root, name);
-    if (path.dirname(target) !== root) throw new Error('Blueprint folder must be directly inside the game\'s blueprints folder.');
-    ensureDir(target);
-    installed = [];
-    for (const b of list) {
-      if (!b.verify.ok) continue;
-      for (const f of [b.sbp, b.sbpcfg]) {
-        const to = path.join(target, path.basename(f));
-        if (fs.existsSync(to)) { notes.push(`Skipped ${path.basename(f)}: a blueprint with that name already exists (not overwritten).`); continue; }
-        fs.copyFileSync(f, to);
-        installed.push(to);
-      }
+  if (installSession) installed = installBlueprintFiles(list.filter((b) => b.verify.ok).map((b) => b.sbp), installSession, notes);
+  return { dir: bpDir, list, notes, installed, installFolder: installSession ? path.join(gameBlueprintRoot(), String(installSession).trim()) : null, sessions: blueprintSessions() };
+}
+
+/**
+ * Copies .sbp (+ .sbpcfg) files into the game's blueprint folder for a session. Only a plain folder name is accepted
+ * (no separators / ".."), the folder must sit directly in the blueprints folder, and existing blueprints are never overwritten.
+ */
+function installBlueprintFiles(sbpFiles, session, notes = []) {
+  const name = String(session || '').trim();
+  if (!name || name.length > 100 || /[\\/:*?"<>|\x00-\x1f]/.test(name) || /^\.+$/.test(name)) {
+    throw new Error(`"${session}" is not a valid session name (use the save's session name, e.g. "New Game").`);
+  }
+  const root = path.resolve(gameBlueprintRoot());
+  const target = path.resolve(root, name);
+  if (path.dirname(target) !== root) throw new Error('Blueprint folder must be directly inside the game\'s blueprints folder.');
+  ensureDir(target);
+  const installed = [];
+  for (const sbp of sbpFiles) {
+    for (const f of [sbp, `${sbp}cfg`]) {
+      const to = path.join(target, path.basename(f));
+      if (fs.existsSync(to)) { notes.push(`Skipped ${path.basename(f)}: a blueprint with that name already exists in "${name}" (not overwritten — give it another name).`); continue; }
+      fs.copyFileSync(f, to);
+      installed.push(to);
     }
   }
-  return { dir: bpDir, list, notes, installed, installFolder: installSession ? path.join(gameBlueprintRoot(), installSession) : null, sessions: blueprintSessions() };
+  return installed;
+}
+
+/** What the Blueprints tab needs: recipes (unlocked first), belt tiers, blueprint folders and this save's session. */
+export function blueprintOptionsAction() {
+  const gd = gameData();
+  const m = currentModel();
+  const recipes = Object.values(gd.recipes).filter((r) => r.kind === 'machine' && r.ingredients.length)
+    .map((r) => ({ name: r.name, building: gd.buildings[recipeRates(gd, r).building]?.name, unlocked: m.unlocks.hasRecipe(r.id), alternate: r.alternate }))
+    .sort((a, b) => b.unlocked - a.unlocked || a.alternate - b.alternate || a.name.localeCompare(b.name));
+  const unlocked = new Set(m.unlocks.buildings);
+  const data = {
+    recipes,
+    belts: gd.beltTiers.map((b) => ({ tier: b.tier, name: b.name, perMin: b.itemsPerMin, unlocked: unlocked.has(b.id) })),
+    bestBelt: m.unlocks.belt?.tier || 1,
+    session: m.header.sessionName,
+    sessions: [...new Set([m.header.sessionName, ...blueprintSessions()])],
+    blueprintsUnlocked: unlocked.has('Build_BlueprintDesigner_C'),
+  };
+  return { data, markdown: `${recipes.length} recipes, session "${data.session}".` };
+}
+
+/** Smallest Blueprint Designer the footprint fits in (Mk.1 32 m, Mk.2 40 m, Mk.3 48 m square). */
+function designerFit(size) {
+  const side = Math.max(size.x, size.y);
+  const d = [{ name: 'Blueprint Designer Mk.1', m: 32 }, { name: 'Blueprint Designer Mk.2', m: 40 }, { name: 'Blueprint Designer Mk.3', m: 48 }].find((x) => side <= x.m);
+  return d ? { fits: true, name: d.name, side: d.m } : { fits: false, name: null, side: 48 };
+}
+
+const outputUrl = (file) => '/output/' + path.relative(OUTPUT_DIR, file).split(path.sep).map(encodeURIComponent).join('/');
+
+/**
+ * Make blueprints. source: 'module' (module: { recipe, machines, clock, rate, beltTier, gap }), 'plan' (request + area as on
+ * Plan & Design), 'rebuild' (request + area + scope as on Rebuild) or 'stage1' (only the rebuild's small first stage).
+ */
+export function blueprintAction({ source = 'module', module = {}, request = {}, area = {}, scope = {}, name, installSession } = {}) {
+  const gd = gameData();
+  const m = currentModel();
+  const title = name && String(name).trim().slice(0, 60);
+  let bp;
+  let sketch = null;
+  let summary = '';
+  if (source === 'module') {
+    const plan = modulePlan(gd, m, module);
+    const layout = generateLayout(gd, plan, { module: true, mode: 'foundation', machineGap: module.gap, title: title || `${plan.module.machines}x ${plan.module.recipe}`, maxMachinesPerRow: Math.min(12, plan.module.machines) }, m);
+    const files = writeDesign(layout, plan, m);
+    bp = blueprintsFor(gd, plan, layout, files.dir, m, installSession);
+    bp.notes.push(...plan.warnings);
+    sketch = files.html;
+    const mo = plan.module;
+    // a belt carries only beltCap/min, so big modules get several feed / output belts
+    const belts = (x) => { if (isFluid(gd, x.item)) return ' (pipe)'; const n = Math.ceil(x.rate / plan.logistics.beltCap - 1e-9); return n > 1 ? ` (${n} belts)` : ''; };
+    summary = `${mo.machines}× ${mo.building} on "${mo.recipe}" @ ${mo.clockPercent}% — feed ${mo.inputs.map((i) => `${i.rate}/min ${i.name}${belts(i)}`).join(' + ')}, get ${mo.outputs.map((o) => `${o.rate}/min ${o.name}${belts(o)}`).join(' + ')} · ${mo.belt} · ${mo.powerMW} MW`;
+  } else if (source === 'plan' || source === 'rebuild') {
+    const r = source === 'plan'
+      ? designAction(request, { ...area, blueprint: true, installSession, title: title || area.title })
+      : rebuildAction(request, { ...area, blueprint: true, installSession, title: title || area.title }, scope);
+    if (!r.data?.blueprints) return r;
+    bp = r.data.blueprints;
+    sketch = r.data.files?.html;
+    summary = source === 'plan' ? 'From your Plan & Design settings.' : 'The whole new factory from your Rebuild settings.';
+  } else if (source === 'stage1') {
+    const r = rebuildAction(request, area, scope);
+    const stage = r.data?.check?.stage;
+    if (!stage?.fullPlan) return { data: r.data, markdown: 'This rebuild has no stage 1: you can afford it without one, or nothing can be built from the miner you keep. Use "whole factory" instead.' };
+    const layout = generateLayout(gd, stage.fullPlan, { mode: 'foundation', title: title || `Stage 1 - ${stage.covers.join(' + ')}` }, m);
+    const files = writeDesign(layout, stage.fullPlan, m);
+    bp = blueprintsFor(gd, stage.fullPlan, layout, files.dir, m, installSession);
+    sketch = files.html;
+    summary = `Stage 1 of your rebuild: ${stage.steps.join(', ')} — let it run ~${Math.ceil(stage.maxMinutes)} min.`;
+  } else throw new Error(`Unknown blueprint source "${source}".`);
+
+  const blueprints = bp.list.map((b) => {
+    const preview = previewBlueprintSvg(b.sbp, { maxWidth: 720, recipeName: (id) => gd.recipes[id]?.name });
+    return {
+    name: b.name,
+    floor: b.floor,
+    sizeM: b.sizeM,
+    foundations: { x: Math.ceil(b.sizeM.x / 8), y: Math.ceil(b.sizeM.y / 8) },
+    stats: b.stats,
+    ok: b.verify.ok,
+    connections: b.verify.connections,
+    problems: b.verify.problems,
+    warnings: b.warnings,
+    file: path.relative(OUTPUT_DIR, b.sbp).split(path.sep).join('/'),
+    sbpUrl: outputUrl(b.sbp),
+    cfgUrl: outputUrl(b.sbpcfg),
+    // very large factories make multi-MB drawings: point to the sketch instead
+    preview: preview.length < 400000 ? preview : null,
+    designer: designerFit(b.sizeM),
+    };
+  });
+  const data = { source, summary, blueprints, notes: bp.notes, installed: bp.installed, installFolder: bp.installFolder, sketchUrl: sketch ? outputUrl(sketch) : null, session: m.header.sessionName };
+  return { data, markdown: `${summary}\n\n${fmt.blueprints({ ...bp, list: bp.list })}` };
+}
+
+/** Install already-made blueprint files (paths relative to output/) into a session's blueprint folder. */
+export function blueprintInstallAction({ files = [], session } = {}) {
+  const root = path.resolve(OUTPUT_DIR);
+  const sbps = files.map((f) => {
+    const abs = path.resolve(root, String(f));
+    const rel = path.relative(root, abs);
+    if (!rel || rel.startsWith('..') || path.isAbsolute(rel) || !/\.sbp$/i.test(abs) || !fs.existsSync(abs) || !fs.existsSync(`${abs}cfg`)) throw new Error(`Not a blueprint made by the planner: ${f}`);
+    return abs;
+  });
+  const notes = [];
+  const installed = installBlueprintFiles(sbps, session, notes);
+  const folder = path.join(gameBlueprintRoot(), String(session).trim());
+  return { data: { installed, notes, folder }, markdown: installed.length ? `Installed ${installed.length / 2} blueprint(s) into ${folder}. In the game: build menu → Blueprints (save "${session}").${notes.length ? `\n${notes.join('\n')}` : ''}` : `Nothing installed. ${notes.join(' ')}` };
 }
 
 function gameBlueprintRoot() {

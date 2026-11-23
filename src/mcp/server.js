@@ -17,7 +17,8 @@ const server = new McpServer(
       '(foundation or ground, width × length, floors) → plan_production → design_factory → hand over the sketch path and build order.',
       'If the player wants to replace temporary builds, use milestone_needs + find_nodes, ask which nodes to use, then plan_rebuild and',
       'walk them through its order of work (never tell them to dismantle before the shortages are covered). upgrade_options shows what',
-      'existing lines gain from better belts/miners. Blueprints (.sbp) need the FICSIT Blueprints milestone (Tier 4) in-game.',
+      'existing lines gain from better belts/miners. make_blueprint writes in-game blueprints (.sbp): machine modules ("3 smelters"), a plan,',
+      'a whole rebuild or its stage 1; install them only when the player asks. Blueprints need the FICSIT Blueprints milestone (Tier 4) in-game.',
     ].join(' '),
   },
 );
@@ -158,6 +159,35 @@ server.registerTool('plan_rebuild', {
     ...areaShape,
   },
 }, wrap((a) => A.rebuildAction(toRequest(a), toArea(a), { scope: a.dismantle, radius: a.dismantle_radius, includePower: a.dismantle_power })));
+
+server.registerTool('make_blueprint', {
+  title: 'Make an in-game blueprint',
+  description: 'Write verified in-game blueprints (.sbp + .sbpcfg). source "module": a machine module, e.g. 2 or 3 smelters on Iron Ingot (recipe + machines, or recipe + rate for the fewest machines); "plan": the factory from the plan options (like design_factory); "rebuild": the whole new factory from a rebuild; "stage1": only the small first stage of a rebuild. Belts that feed the module and carry its output end open, ready to connect. Returns sizes, which Blueprint Designer it fits, and file paths. Blueprints need the FICSIT Blueprints milestone (Tier 4).',
+  inputSchema: {
+    source: z.enum(['module', 'plan', 'rebuild', 'stage1']).describe('module (default) | plan | rebuild | stage1'),
+    recipe: z.string().optional().describe('module: recipe or item name, e.g. "Iron Ingot", "Screw", "Alternate: Iron Wire"'),
+    machines: z.number().int().min(1).max(40).optional().describe('module: number of machines (default 1, or as few as needed for rate)'),
+    clock: z.number().min(1).max(250).optional().describe('module: clock speed in % (default 100; above 100 needs power shards)'),
+    rate: z.number().positive().optional().describe('module: wanted output of the main product per minute (sets the clock, and the machine count if machines is not given)'),
+    belt_tier: z.number().int().min(1).max(6).optional().describe('module: belt tier (default: best unlocked)'),
+    gap: z.number().min(0).max(8).optional().describe('module: extra metres between machines (default 0)'),
+    name: z.string().max(60).optional().describe('Blueprint name shown in the game'),
+    ...planShape,
+    dismantle: z.union([z.enum(['near', 'all', 'none']), z.array(z.number().int())]).optional().describe('rebuild/stage1: which old lines to tear down'),
+    dismantle_radius: z.number().optional(),
+    ...areaShape,
+  },
+}, wrap((a) => {
+  const source = a.source || 'module';
+  const installSession = a.install_blueprint_session;
+  if (source === 'module') {
+    if (!a.recipe) throw new Error('Give a recipe (or item) for the module, e.g. "Iron Ingot".');
+    return A.blueprintAction({ source, name: a.name, installSession, module: { recipe: a.recipe, machines: a.machines, clock: a.clock, rate: a.rate, beltTier: a.belt_tier, gap: a.gap } });
+  }
+  const request = toRequest(a);
+  if (source !== 'plan') request.rebuild = true;
+  return A.blueprintAction({ source, name: a.name, installSession, request, area: toArea(a), scope: { scope: a.dismantle, radius: a.dismantle_radius } });
+}));
 
 server.registerTool('list_lines', {
   title: 'Existing production lines',

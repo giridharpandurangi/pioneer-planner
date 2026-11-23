@@ -1,6 +1,9 @@
 // End-to-end checks against the newest local save: `npm test`
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { OUTPUT_DIR } from '../src/config.js';
 import * as A from '../src/core/actions.js';
 import { currentModel, gameData } from '../src/core/session.js';
 import { planProduction } from '../src/planner/plan.js';
@@ -112,6 +115,46 @@ test('design writes an HTML sketch', () => {
   const r = A.designAction({ targets: [{ item: 'Iron Plate', rate: 20 }] }, { mode: 'foundation' });
   assert.ok(r.data.files?.html && fs.existsSync(r.data.files.html), 'html path');
   fs.rmSync(r.data.files.dir, { recursive: true, force: true });
+});
+test('blueprint modules: machine count, output rate and belt count', () => {
+  const two = A.blueprintAction({ source: 'module', module: { recipe: 'Iron Ingot', machines: 2, beltTier: 1 } }).data;
+  assert.equal(two.blueprints.length, 1);
+  assert.ok(two.blueprints[0].ok, two.blueprints[0].problems.join('; '));
+  assert.equal(two.blueprints[0].stats.machines, 2);
+  assert.ok(two.blueprints[0].preview.startsWith('<svg'), 'preview drawn');
+  const three = A.blueprintAction({ source: 'module', module: { recipe: 'Iron Ingot', machines: 3, beltTier: 1 } }).data;
+  assert.match(three.summary, /90\/min Iron Ore \(2 belts\)/, 'Mk.1 carries 60/min, so 90/min needs two feed belts');
+  assert.ok(three.blueprints[0].ok);
+  const rate = A.blueprintAction({ source: 'module', module: { recipe: 'Iron Plate', rate: 60 }, name: 'Plates test' }).data;
+  assert.equal(rate.blueprints[0].stats.machines, 3, '60 plates/min = 3 constructors at 100%');
+  assert.equal(rate.blueprints[0].name, 'Plates test');
+  for (const d of [two, three, rate]) fs.rmSync(path.join(OUTPUT_DIR, d.blueprints[0].file.split('/')[0]), { recursive: true, force: true });
+});
+test('blueprint from the plan settings', () => {
+  const d = A.blueprintAction({ source: 'plan', request: { targets: [{ item: 'Iron Plate', rate: 20 }] }, area: { mode: 'foundation' } }).data;
+  assert.ok(d.blueprints.length >= 1 && d.blueprints.every((b) => b.ok));
+  fs.rmSync(path.join(OUTPUT_DIR, d.blueprints[0].file.split('/')[0]), { recursive: true, force: true });
+});
+test('blueprint install stays in the blueprints folder and never overwrites', () => {
+  const saved = process.env.LOCALAPPDATA;
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'pp-bp-'));
+  const d = A.blueprintAction({ source: 'module', module: { recipe: 'Iron Ingot', machines: 2 }, name: 'Install test' }).data;
+  try {
+    process.env.LOCALAPPDATA = tmp; // pretend game folder
+    const first = A.blueprintInstallAction({ files: [d.blueprints[0].file], session: 'Test Session' }).data;
+    assert.equal(first.installed.length, 2, '.sbp + .sbpcfg');
+    assert.ok(first.installed.every((f) => f.startsWith(path.join(tmp, 'FactoryGame', 'Saved', 'SaveGames', 'blueprints', 'Test Session'))));
+    const again = A.blueprintInstallAction({ files: [d.blueprints[0].file], session: 'Test Session' }).data;
+    assert.equal(again.installed.length, 0, 'existing blueprint is not overwritten');
+    assert.match(again.notes.join(' '), /already exists/);
+    assert.throws(() => A.blueprintInstallAction({ files: [d.blueprints[0].file], session: '../evil' }), /not a valid session/);
+    assert.throws(() => A.blueprintInstallAction({ files: ['../package.json'], session: 'Test Session' }), /Not a blueprint/);
+    assert.throws(() => A.blueprintInstallAction({ files: [d.blueprints[0].file + 'cfg'], session: 'Test Session' }), /Not a blueprint/);
+  } finally {
+    process.env.LOCALAPPDATA = saved;
+    fs.rmSync(tmp, { recursive: true, force: true });
+    fs.rmSync(path.join(OUTPUT_DIR, d.blueprints[0].file.split('/')[0]), { recursive: true, force: true });
+  }
 });
 
 console.log(failures ? `\n${failures} test(s) failed` : '\nall tests passed');
