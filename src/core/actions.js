@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { exportBlueprints } from '../blueprint/build.js';
-import { milestoneNeeds, planForGoals } from '../planner/goals.js';
+import { DEFAULT_GOAL_MINUTES, milestoneNeeds, planForGoals } from '../planner/goals.js';
 import { productionGroups, rebuildCheck } from '../rebuild/rebuild.js';
 import { guidePage, renderGuide } from '../rebuild/guide.js';
 import { upgradeOptions } from '../analysis/upgrade.js';
@@ -112,6 +112,7 @@ export function itemAction(query) {
  *  'active'     automatic: only the active milestone
  *  'items'      automatic: request.autoItems (or targets given without a rate) — as much as the nodes allow,
  *               mixed in the ratio your milestones still need them (equal mix for items they don't need)
+ * request.goalMinutes (milestones / active): finish in about this many minutes (default 30), or 'fastest'.
  * Returns { plan, goal } or { error: {data, markdown} }.
  */
 function resolvePlan(gd, m, request) {
@@ -138,10 +139,13 @@ function resolvePlan(gd, m, request) {
   } else {
     needsInfo = milestoneNeeds(gd, m, { scope: mode === 'active' ? 'active' : request.goalScope || 'tier' });
   }
-  const g = planForGoals(gd, m, { ...request, targets: fixed }, needsInfo);
+  // milestone modes are sized to a finish time; "items" means as much as the nodes allow
+  const gm = request.goalMinutes;
+  const minutes = mode === 'items' || gm === 'fastest' || gm === 0 || gm === '0' ? undefined : Number(gm) > 0 ? Number(gm) : DEFAULT_GOAL_MINUTES;
+  const g = planForGoals(gd, m, { ...request, targets: fixed }, needsInfo, { minutes });
   if (g.nothingNeeded) return { error: { data: g, markdown: `Nothing is missing: your storage already has everything ${mode === 'active' ? 'your active milestone' : 'the milestones you can buy now'} need${g.needs?.goals?.length ? ` (${g.needs.goals.map((x) => x.name).join(', ')})` : ''}. Go submit them at the HUB, or pick items / give amounts instead.` } };
   if (!g.ok) return { error: { data: g, markdown: `**No plan possible.** ${g.message}` } };
-  return { plan: g.plan, goal: { mode, minutes: g.minutes, targets: g.targets, needs: g.needs, blocked: g.blocked } };
+  return { plan: g.plan, goal: { mode, minutes: g.minutes, fastestMinutes: g.fastestMinutes, wantedMinutes: g.wantedMinutes, limitedBy: g.limitedBy, targets: g.targets, needs: g.needs, blocked: g.blocked } };
 }
 
 export function planAction(request) {
@@ -367,7 +371,7 @@ export function rebuildAction(request = {}, area = {}, scope = {}) {
   files.guide = guideFile;
   const guideHtml = renderGuide(check.timeline, guideOpts);
   return {
-    data: { plan, goal: goal && { minutes: goal.minutes, targets: goal.targets, needs: goal.needs, blocked: goal.blocked }, check, files, blueprints, guideHtml },
+    data: { plan, goal: goal && { minutes: goal.minutes, fastestMinutes: goal.fastestMinutes, wantedMinutes: goal.wantedMinutes, limitedBy: goal.limitedBy, targets: goal.targets, needs: goal.needs, blocked: goal.blocked }, check, files, blueprints, guideHtml },
     markdown: fmt.rebuild(plan, goal, check, layout, files) + `\n**Visual step-by-step guide:** ${guideFile}` + (blueprints ? fmt.blueprints(blueprints) : ''),
   };
 }

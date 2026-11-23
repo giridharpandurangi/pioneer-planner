@@ -113,7 +113,7 @@ Then just talk to it, e.g.:
 Use it when you want to tear down what you have and build something better, without getting stuck halfway because you ran out of materials. CLI: `node bin/sfp.js rebuild --nearest 3 --node-res "Iron Ore"`. Web: the **Rebuild** tab. AI: `plan_rebuild`.
 
 1. **Pick nodes.** Tick them in the web UI, pass `--nodes` / `--nearest`, or let the AI ask you. Nodes that already have a miner count as fully free, and the miner is kept.
-2. **Pick a goal.** By default it finishes *everything your next milestones and the next Space Elevator phase still need* (minus what's in storage) as fast as possible from those nodes. Or give your own targets.
+2. **Pick a goal.** By default it builds for *everything your next milestones and the next Space Elevator phase still need* (minus what's in storage), sized to finish in about 30 minutes (pick 15 min to 2 hours, or as fast as the nodes allow). Or give your own targets.
 3. **It checks the money.** The new build's cost (machines, splitters, mergers, foundations, poles, new miners, belts at ~1 unit per 2 m) is compared with your storage plus what dismantling the old lines refunds (100%), including items sitting in machine buffers.
 4. **It covers every shortage** with the fastest option:
    - wait for your current factory;
@@ -205,7 +205,7 @@ node bin/sfp.js help
 ```
 
 **Don't know how much to make?** Leave the amounts out. `plan`, `design` and `rebuild` (and the web UI's *How much?* box, and the AI tools via `goal`) can choose them for you:
-- `--goal milestones`: whatever your next milestones and Space Elevator phase still need beyond storage, at the rates that finish it all fastest. This is the default when you give no items.
+- `--goal milestones`: whatever your next milestones and Space Elevator phase still need beyond storage, sized to finish it all in about 30 minutes. This is the default when you give no items. `--minutes 60` builds a smaller factory, `--minutes 15` a bigger one. `--minutes fastest` uses every node in range, which is usually far too big: on a Tier 2 save it planned 228 machines instead of 18.
 - `--goal active`: the same, for the active milestone only.
 - `"Iron Plate" "Rotor"` (no `:rate`): these items, as much as your nodes allow, mixed in the ratio your milestones need them.
 
@@ -242,7 +242,7 @@ src/save/model.js        save → factory model (unlocks, buildings, belt graph,
 src/analysis/            flow simulation + improvement rules
 src/planner/plan.js      LP planner (unlocks, nodes, belt caps)
 src/layout/              layout engine + SVG/HTML renderer
-src/planner/goals.js     milestone needs + "finish them fastest" planning
+src/planner/goals.js     milestone needs + "finish them in N minutes" planning
 src/rebuild/             dismantle refunds, material balance, staged rebuild order
 src/analysis/upgrade.js  upgrade options for existing miners/lines
 src/blueprint/           .sbp writer, machine modules, learned port geometry, templates, verifier, preview

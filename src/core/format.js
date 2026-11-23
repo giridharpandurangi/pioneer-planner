@@ -107,7 +107,12 @@ export function goalHeader(goal) {
   const blocked = goal.blocked?.length ? `\nCan't make with these nodes/unlocks: ${goal.blocked.map((b) => b.name).join(', ')}.` : '';
   if (goal.mode === 'items') return `> **Automatic amounts** — as much as your nodes allow: ${list}. The mix follows what your milestones still need (equal share for items they don't need).${blocked}\n\n`;
   const missing = goal.needs.needs.filter((n) => n.missing > 0).map((n) => `${n.missing} ${n.name}`).join(', ');
-  return `> **Automatic amounts** — you still need ${missing} for ${goal.needs.goals.map((g) => g.name).join(', ')}. This factory makes ${list}, which finishes all of it in **~${goal.minutes} min**.${blocked}\n\n`;
+  const speed = goal.limitedBy === 'time'
+    ? ` Sized to finish in the time you picked; your nodes could do it in ~${goal.fastestMinutes} min, with a much bigger factory.`
+    : goal.wantedMinutes
+      ? ` That's as fast as these nodes allow (you picked ~${goal.wantedMinutes} min: tick more or better nodes to go faster).`
+      : ' That\'s as fast as these nodes allow.';
+  return `> **Automatic amounts** — you still need ${missing} for ${goal.needs.goals.map((g) => g.name).join(', ')}. This factory makes ${list}, which finishes all of it in **~${goal.minutes} min**.${speed}${blocked}\n\n`;
 }
 
 export function needs(n) {

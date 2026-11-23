@@ -81,6 +81,7 @@ a.btn{display:inline-block;text-decoration:none;color:var(--text);background:#23
           <option value="items">Automatic: these items, as much as my nodes allow</option>
           <option value="targets">I'll type the amounts</option>
         </select></div>
+        <div class="row" id="minutesRow"><label>Finish in</label><select id="goalMinutes"><option value="15">~15 min (bigger factory)</option><option value="30" selected>~30 min</option><option value="60">~1 hour (smaller)</option><option value="120">~2 hours (smallest)</option><option value="fastest">as fast as my nodes allow (huge)</option></select></div>
         <div id="goalHint" class="hint"></div>
         <div id="targetsWrap">
           <div id="targets"></div>
@@ -114,6 +115,7 @@ a.btn{display:inline-block;text-decoration:none;color:var(--text);background:#23
       <fieldset><legend>1 · Nodes to use (none ticked = any node nearby)</legend><div id="rbNodes" class="hint">Loading nearby nodes…</div></fieldset>
       <fieldset><legend>2 · Goal &amp; tear-down</legend>
         <div class="row"><label>Build for</label><select id="rbGoal"><option value="tier">everything my next milestones + space elevator need</option><option value="active">only my active milestone</option><option value="targets">the targets on the Plan tab</option></select></div>
+        <div class="row" id="rbMinutesRow"><label>Finish in</label><select id="rbMinutes"><option value="15">~15 min (bigger factory)</option><option value="30" selected>~30 min</option><option value="60">~1 hour (smaller)</option><option value="120">~2 hours (smallest)</option><option value="fastest">as fast as my nodes allow (huge)</option></select></div>
         <div class="row"><button id="rbNeeds">What do I still need?</button></div>
         <div class="row"><label>Dismantle</label><select id="rbScope"><option value="near">old lines within</option><option value="all">all old lines</option><option value="none">nothing</option></select><input type="number" id="rbRadius" value="250" style="width:80px"> m of HUB</div>
         <div class="row"><label><input type="checkbox" id="rbPower"> also lines that feed my power</label></div>
@@ -318,7 +320,7 @@ async function loadNodePicker(containerId, cls) {
 }
 const loadRbNodes = () => loadNodePicker('rbNodes', 'rbNode');
 const GOAL_HINTS = {
-  milestones: 'The tool adds up what your next milestones and Space Elevator phase still need (minus storage) and picks the rates that finish all of it fastest from your nodes.',
+  milestones: 'The tool adds up what your next milestones and Space Elevator phase still need (minus storage) and sizes the factory to finish all of it in the time you pick: shorter = more machines and nodes.',
   active: 'Like above, but only for the milestone you have selected in the HUB.',
   items: 'Pick the items; leave the amount blank and the tool makes as much as your nodes allow (the mix follows what your milestones need). You can still type an amount for some of them.',
   targets: 'Type how many per minute you want of each item.',
@@ -328,11 +330,14 @@ function syncGoalMode() {
   // item modes always show at least one row to type into
   if ((g === 'items' || g === 'targets') && !document.querySelector('#targets .target')) addTarget();
   $('targetsWrap').style.display = g === 'milestones' || g === 'active' ? 'none' : '';
+  $('minutesRow').style.display = g === 'milestones' || g === 'active' ? '' : 'none';
   $('maxRow').style.display = g === 'targets' ? '' : 'none';
   $('goalHint').textContent = GOAL_HINTS[g];
   document.querySelectorAll('#targets .target input[type=number]').forEach((i) => { i.placeholder = g === 'items' ? 'auto' : '/min'; });
 }
 $('goalMode').onchange = syncGoalMode;
+// the finish time only applies to the automatic milestone goals
+$('rbGoal').onchange = () => { $('rbMinutesRow').style.display = $('rbGoal').value === 'targets' ? 'none' : ''; };
 async function loadItems() {
   const j = await api('/api/items');
   $('itemsList').innerHTML = j.data.map((x) => `<option value="${esc(x.name)}">${x.unlocked ? '' : '🔒 locked'}</option>`).join('');
@@ -371,6 +376,7 @@ async function deepLink(qp) {
     if (qp.get('line')) await $('upLineBtn').onclick();
   } else if (tab === 'plan') {
     if (qp.get('goal')) { $('goalMode').value = qp.get('goal'); syncGoalMode(); }
+    if (qp.get('minutes')) $('goalMinutes').value = qp.get('minutes');
     for (const id of (qp.get('nodes') || '').split(',').filter(Boolean)) {
       const cb = [...document.querySelectorAll('.planNode')].find((c) => c.value === id);
       if (cb) cb.checked = true;
@@ -380,6 +386,7 @@ async function deepLink(qp) {
     else if (qp.get('run') === 'plan') await $('planBtn').onclick();
   } else if (tab === 'rebuild') {
     await loadRbNodes();
+    if (qp.get('minutes')) $('rbMinutes').value = qp.get('minutes');
     for (const id of (qp.get('nodes') || '').split(',').filter(Boolean)) {
       const cb = [...document.querySelectorAll('.rbNode')].find((c) => c.value === id);
       if (cb) cb.checked = true;
@@ -436,6 +443,7 @@ function request() {
   const nodes = [...document.querySelectorAll('.planNode:checked')].map((c) => c.value);
   return {
     goal: g,
+    goalMinutes: $('goalMinutes').value,
     targets,
     nodes: nodes.length ? nodes : undefined,
     rebuild: $('planRebuild').checked,
@@ -654,7 +662,7 @@ function rbBody() {
   const base = request();
   // "the targets on the Plan tab" keeps that tab's mode (typed amounts or automatic items)
   const planGoal = ['milestones', 'active'].includes(base.goal) ? 'items' : base.goal;
-  const req = { ...base, nodes: nodes.length ? nodes : undefined, rebuild: true, goal: goal === 'targets' ? planGoal : goal === 'active' ? 'active' : 'milestones', targets: goal === 'targets' ? base.targets : [], maximize: goal === 'targets' ? base.maximize : undefined, resources: 'free-nodes' };
+  const req = { ...base, goalMinutes: $('rbMinutes').value, nodes: nodes.length ? nodes : undefined, rebuild: true, goal: goal === 'targets' ? planGoal : goal === 'active' ? 'active' : 'milestones', targets: goal === 'targets' ? base.targets : [], maximize: goal === 'targets' ? base.maximize : undefined, resources: 'free-nodes' };
   const floors = $('rbFloors').value;
   const ar = { mode: $('rbMode').value, width: Number($('rbWidth').value) || undefined, length: Number($('rbLength').value) || undefined, unit: $('rbUnit').value, floors: floors === 'auto' ? 'auto' : Number(floors), blueprint: $('rbBp').checked };
   const scope = { scope: $('rbScope').value, radius: Number($('rbRadius').value) || 250, includePower: $('rbPower').checked };

@@ -33,7 +33,8 @@ Usage: node bin/sfp.js <command> [args] [--save NAME]
   mcp                           MCP server on stdio (for Claude / other AI clients)
 
 Don't know how much to make? Leave the amounts out:
-  plan --goal milestones        whatever your next milestones + space elevator still need (default if no items)
+  plan --goal milestones        whatever your next milestones + space elevator still need (default if no items),
+                                sized to finish in ~30 min; --minutes 60 = smaller, --minutes fastest = as big as nodes allow
   plan --goal active            only your active milestone
   plan "Iron Plate" "Rotor"     these items, as much as your nodes allow (no ":rate" = automatic)
 
@@ -120,6 +121,7 @@ async function main() {
     nodeResources: opts['node-res'] ? String(opts['node-res']).split(',') : undefined,
     rebuild: !!opts.rebuild,
     goal: opts.goal,
+    goalMinutes: opts.minutes === 'fastest' ? 'fastest' : opts.minutes ? Number(opts.minutes) : undefined,
   });
   const area = () => ({
     mode: opts.mode, width: opts.width && Number(opts.width), length: opts.length && Number(opts.length), unit: opts.unit,

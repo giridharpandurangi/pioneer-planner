@@ -89,6 +89,20 @@ test('automatic amounts: milestones and items modes', () => {
   assert.equal(items.data.goal?.mode, 'items');
   assert.ok(items.data.goal.targets[0].rate > 0, 'picked a rate automatically');
 });
+test('milestone factory is sized to a finish time, not to every node in range', () => {
+  const def = A.planAction({ goal: 'milestones' });
+  if (!def.data?.goal) return; // nothing missing in this save
+  const fast = A.planAction({ goal: 'milestones', goalMinutes: 'fastest' }).data;
+  const machines = (p) => p.steps.reduce((a, s) => a + s.machines, 0);
+  assert.equal(fast.goal.limitedBy, 'nodes');
+  if (fast.goal.fastestMinutes < 30) {
+    assert.equal(def.data.goal.minutes, 30, 'default finish time');
+    assert.equal(def.data.goal.limitedBy, 'time');
+    assert.ok(machines(def.data) < machines(fast), 'slower finish = fewer machines');
+    const hour = A.planAction({ goal: 'milestones', goalMinutes: 60 }).data;
+    assert.ok(machines(hour) <= machines(def.data), '1 hour is no bigger than 30 min');
+  }
+});
 test('upgrade line + compare plan at better tiers', () => {
   const lines = A.linesAction().data.lines.filter((l) => l.miners.length);
   if (lines.length) {

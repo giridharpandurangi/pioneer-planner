@@ -1,5 +1,5 @@
 // "What do I still need?" — remaining milestone / space-elevator costs minus what you have,
-// and a planner mode that builds the factory finishing all of it fastest.
+// and a planner mode that builds the factory finishing all of it in a chosen time (or as fast as the nodes allow).
 import { itemName, resolveItem } from '../gamedata/loader.js';
 import { nextUnlocks } from '../analysis/analyze.js';
 import { planProduction } from './plan.js';
@@ -31,11 +31,16 @@ export function milestoneNeeds(gd, model, { scope = 'tier', elevator = true } = 
   return { goals, needs };
 }
 
+/** Default finish time for the automatic milestone modes: big enough to matter, small enough to afford. */
+export const DEFAULT_GOAL_MINUTES = 30;
+
 /**
  * Plan the factory that produces every missing goal item in proportion, finishing them all at the same time.
+ * opts.minutes: finish in about this many minutes (a smaller factory); if the nodes can't make it that fast, or
+ * minutes is not given, the factory is as fast as the nodes allow.
  * Items that cannot be made with your unlocks / selected nodes are reported and left out.
  */
-export function planForGoals(gd, model, request, needsInfo) {
+export function planForGoals(gd, model, request, needsInfo, { minutes } = {}) {
   const missing = needsInfo.needs.filter((n) => n.missing > 0);
   if (!missing.length) return { ok: true, nothingNeeded: true, needs: needsInfo };
   // which items can be produced at all with these rules?
@@ -48,13 +53,20 @@ export function planForGoals(gd, model, request, needsInfo) {
   if (!producible.length) return { ok: false, message: `None of the missing items can be made with the selected nodes/unlocks. ${blocked.map((b) => `${b.name}: ${b.reason}`).join(' ')}`, needs: needsInfo, blocked };
   const goal = planProduction(gd, model, { ...request, goalVector: producible.map((n) => ({ item: n.item, amount: n.missing })) });
   if (!goal.ok || !goal.goalT) return { ok: false, message: 'Could not find a production mix for the missing items with these nodes.', needs: needsInfo, blocked };
-  const t = goal.goalT * 0.999;
+  const fastest = 1 / goal.goalT;
+  const wanted = Number(minutes) > 0 ? Number(minutes) : null;
+  // slower than the nodes could go = fewer machines and nodes; never faster than they allow
+  const byTime = wanted !== null && wanted > fastest;
+  const t = byTime ? 1 / wanted : goal.goalT * 0.999;
   const targets = producible.map((n) => ({ item: n.item, rate: Math.round(n.missing * t * 1000) / 1000 })).filter((x) => x.rate > 0);
   const plan = planProduction(gd, model, { ...request, targets: [...(request.targets || []), ...targets], goalVector: undefined });
   return {
     ok: plan.ok,
     plan,
-    minutes: Math.round((1 / goal.goalT) * 10) / 10,
+    minutes: Math.round((byTime ? wanted : fastest) * 10) / 10,
+    fastestMinutes: Math.round(fastest * 10) / 10,
+    wantedMinutes: wanted,
+    limitedBy: byTime ? 'time' : 'nodes',
     targets: targets.map((x) => ({ ...x, name: itemName(gd, x.item) })),
     needs: needsInfo,
     blocked,

@@ -46,8 +46,9 @@ const planShape = {
   nearest_nodes: z.number().int().optional().describe('Use only the N nearest nodes to the site'),
   node_resources: z.array(z.string()).optional().describe('With nearest_nodes: only count nodes of these resources, e.g. ["Iron Ore"]'),
   rebuild: z.boolean().optional().describe('Treat nodes that already have a miner as fully free (their old consumers will be dismantled; the miner is kept)'),
-  goal: z.enum(['targets', 'milestones', 'active', 'items']).optional().describe('How amounts are chosen. targets: the rates you give. milestones: AUTOMATIC — everything the milestones the player can buy now (+ next Space Elevator phase) still need beyond storage, finishing all of it fastest. active: same for the active milestone only. items: AUTOMATIC — the auto_items as much as the nodes allow. Use milestones/items when the player does not know how much to make.'),
+  goal: z.enum(['targets', 'milestones', 'active', 'items']).optional().describe('How amounts are chosen. targets: the rates you give. milestones: AUTOMATIC — everything the milestones the player can buy now (+ next Space Elevator phase) still need beyond storage, sized to finish all of it in goal_minutes (default 30). active: same for the active milestone only. items: AUTOMATIC — the auto_items as much as the nodes allow. Use milestones/items when the player does not know how much to make.'),
   auto_items: z.array(z.string()).optional().describe('With goal "items": items to make without fixed rates (amounts chosen automatically)'),
+  goal_minutes: z.union([z.number().positive(), z.literal('fastest')]).optional().describe('With goal milestones/active: finish everything in about this many minutes (default 30: a modest factory). Shorter = bigger factory. "fastest" = as big as the nodes allow (usually far too big)'),
 };
 const toRequest = (a) => ({
   targets: a.targets || [],
@@ -67,6 +68,7 @@ const toRequest = (a) => ({
   nodeResources: a.node_resources,
   rebuild: a.rebuild,
   goal: a.goal,
+  goalMinutes: a.goal_minutes,
   autoItems: a.auto_items,
 });
 const areaShape = {
@@ -150,7 +152,7 @@ server.registerTool('milestone_needs', {
 
 server.registerTool('plan_rebuild', {
   title: 'Plan a tear-down and rebuild',
-  description: 'For replacing temporary builds: plans the new factory (default goal: finish the next milestones as fast as possible from the chosen nodes), lays it out, then compares its cost with storage + what dismantling the old lines refunds (100%). Lists shortages and how to cover each (wait for current production, hand-craft, or build a small affordable stage 1 first) and gives the order of work: what to craft first, when to dismantle, what to build first.',
+  description: 'For replacing temporary builds: plans the new factory (default goal: finish the next milestones in ~30 min from the chosen nodes; set goal_minutes to change), lays it out, then compares its cost with storage + what dismantling the old lines refunds (100%). Lists shortages and how to cover each (wait for current production, hand-craft, or build a small affordable stage 1 first) and gives the order of work: what to craft first, when to dismantle, what to build first.',
   inputSchema: {
     ...planShape,
     dismantle: z.union([z.enum(['near', 'all', 'none']), z.array(z.number().int())]).optional().describe('Which old lines to tear down: near (default, within dismantle_radius of the site), all, none, or line numbers from the result'),
