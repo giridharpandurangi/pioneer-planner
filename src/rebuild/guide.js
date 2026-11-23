@@ -75,8 +75,9 @@ function dismantleSvg(c) {
   const parts = c.line.parts.filter((p) => !['splitter', 'merger'].includes(p.kind));
   const w = 132;
   const gap = 34;
-  const W = Math.max(620, 10 + parts.length * (w + gap));
   const refund = c.line.refund.slice(0, 5);
+  const chipW = (r) => Math.max(110, 50 + r.name.length * 7 + String(r.amount).length * 8);
+  const W = Math.max(620, 10 + parts.length * (w + gap), 112 + refund.reduce((s, r) => s + chipW(r) + 8, 0) + 10);
   const H = 96 + (refund.length ? 46 : 0);
   const { id, head } = svgOpen(W, H);
   let s = head;
@@ -92,7 +93,7 @@ function dismantleSvg(c) {
   if (refund.length) {
     s += `<text x="10" y="${96 + 26}" fill="#86efac" font-size="12" font-weight="700">↩ you get back</text>`;
     let x = 112;
-    for (const r of refund) { const cw = Math.max(110, 50 + r.name.length * 7 + String(r.amount).length * 8); s += chip(x, 96 + 4, cw, r.name, r.amount); x += cw + 8; }
+    for (const r of refund) { const cw = chipW(r); s += chip(x, 96 + 4, cw, r.name, r.amount); x += cw + 8; }
   }
   return s + '</svg>';
 }

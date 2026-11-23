@@ -4,6 +4,16 @@
 
 > Fan project, not affiliated with or endorsed by Coffee Stain Studios. Satisfactory is a trademark of Coffee Stain Studios.
 
+![Pioneer Planner: plan that finishes your next milestones from the nodes you pick](docs/screenshots/plan-automatic.png)
+
+## Screenshots
+
+| | |
+|---|---|
+| **Your factory at a glance.** Tier, active milestone, belts, power, every miner and machine, all read from your save. ![Overview](docs/screenshots/overview.png) | **Node map + search.** Every node from your save, sized by purity; results are numbered on the map, and you click to pick nodes for planning. ![Node map](docs/screenshots/node-map.png) |
+| **Visual rebuild guide.** Craft first, then dismantle (100% refund), build a small stage 1 and let it run, then the rest. ![Rebuild guide](docs/screenshots/rebuild-guide.png) | **Layout sketch.** Machine rows with splitter/merger manifolds, a belt corridor, and every belt within your belt tier. ![Layout sketch](docs/screenshots/layout-sketch.png) |
+| **Upgrade planner.** What a line becomes with Mk.2 belts or miners: extra output, machines to add, exact belts to swap, and the cost after refunds. ![Upgrade](docs/screenshots/upgrade-line.png) | |
+
 It's a local tool that reads **your own save file**. It knows exactly what you have unlocked, where your miners are, which free nodes exist (with purity), and how your belts are connected. It then:
 
 - **Scans your factory** and finds what's wrong, with concrete fixes. Examples: belt-capped miners, starved or backed-up machines (and *why*), unconnected outputs, full storage, low fuel, power headroom, and what you're still missing for your active milestone.
@@ -143,6 +153,8 @@ The web UI's **Nodes** tab has a map of every resource node in your save:
 
 It's a schematic map without the game's terrain picture, which isn't available outside the game files.
 
+**Deep links** open a view directly, for example `http://localhost:5178/?tab=nodes&q=Iron%20Ore&purity=pure` or `?tab=upgrade&line=1&belt=2`.
+
 ## Command line
 
 ```powershell
@@ -205,7 +217,8 @@ src/rebuild/             dismantle refunds, material balance, staged rebuild ord
 src/analysis/upgrade.js  upgrade options for existing miners/lines
 src/blueprint/           .sbp writer, learned port geometry, templates, verifier, preview
 data/                    learned port positions + blueprint object templates
-tools/                   learn.js (learn from big saves), dump helpers
+tools/                   learn.js (learn from big saves), screenshots.js (README images), dump helpers
+docs/screenshots/        README images
 src/core/                shared actions + markdown formatting
 src/mcp/server.js        MCP server
 src/web/                 local web UI + JSON API

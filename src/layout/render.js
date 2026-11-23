@@ -21,10 +21,13 @@ export function renderFloorSvg(layout, floorIndex, colors = itemColors(layout)) 
   const el = layout.elements[floorIndex];
   const W = f.width;
   const L = Math.max(f.length, f.usedLength);
+  // outputs leaving through the top get their own label rows above the floor (they sit 2 m apart, so labels would collide)
+  const outLabels = el.labels.filter((l) => l.kind !== 'input').sort((a, b) => a.x - b.x);
+  const padT = PAD.t + (outLabels.length ? outLabels.length * 14 + 10 : 0);
   const X = (m) => PAD.l + m * PX;
-  const Y = (m) => PAD.t + (L - m) * PX; // y up = north
+  const Y = (m) => padT + (L - m) * PX; // y up = north
   const w = PAD.l + W * PX + PAD.r;
-  const h = PAD.t + L * PX + PAD.b;
+  const h = padT + L * PX + PAD.b;
   const parts = [];
   parts.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" font-family="Segoe UI, Roboto, sans-serif" class="sfp-floor">`);
   parts.push(`<defs><marker id="arr${floorIndex}" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="context-stroke"/></marker></defs>`);
@@ -73,11 +76,15 @@ export function renderFloorSvg(layout, floorIndex, colors = itemColors(layout)) 
     parts.push(`<g><circle cx="${X(l.x)}" cy="${Y(l.y)}" r="${1.4 * PX}" fill="#f472b6" stroke="#111"/><text x="${X(l.x) + 1.8 * PX}" y="${Y(l.y) + 4}" font-size="10" fill="#f9a8d4">LIFT ${label} (${l.height} m)</text></g>`);
   }
   // IN / OUT labels
-  for (const lab of el.labels) {
-    const isIn = lab.kind === 'input';
-    const y = isIn ? Y(0) + 14 + (el.labels.filter((x) => x.kind === 'input').indexOf(lab) % 4) * 12 : Y(lab.y) - 6;
-    parts.push(`<text x="${X(lab.x)}" y="${y}" fill="${colors[lab.item] || '#ddd'}" font-size="10" ${isIn ? '' : 'font-weight="700"'}>${esc(lab.text)}</text>`);
-  }
+  const ins = el.labels.filter((x) => x.kind === 'input');
+  ins.forEach((lab, k) => parts.push(`<text x="${X(lab.x)}" y="${Y(0) + 14 + (k % 4) * 12}" fill="${colors[lab.item] || '#ddd'}" font-size="10">${esc(lab.text)}</text>`));
+  // outputs: one row each above the floor, joined to their belt by a thin line
+  outLabels.forEach((lab, k) => {
+    const rowY = PAD.t + 4 + k * 14;
+    const col = colors[lab.item] || '#ddd';
+    parts.push(`<line x1="${X(lab.x)}" y1="${Y(lab.y)}" x2="${X(lab.x)}" y2="${rowY + 3}" stroke="${col}" stroke-width="1" stroke-dasharray="2 2" opacity="0.8"/>`);
+    parts.push(`<text x="${X(lab.x) + 4}" y="${rowY + 4}" fill="${col}" font-size="10.5" font-weight="700">▲ ${esc(lab.text)}</text>`);
+  });
   // header & scale
   parts.push(`<text x="${PAD.l}" y="18" fill="#e2e8f0" font-size="14" font-weight="700">Floor ${f.index}${f.elevation ? ` (+${f.elevation} m)` : ''} — ${W} × ${f.length} m (${Math.ceil(W / 8)} × ${Math.ceil(f.length / 8)} foundations)</text>`);
   parts.push(`<text x="${PAD.l}" y="32" fill="#94a3b8" font-size="11">North is up · grid = 8 m foundation · belts ≤ ${layout.beltCap}/min (${esc(layout.belt || '')})</text>`);
