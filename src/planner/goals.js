@@ -38,9 +38,10 @@ export const DEFAULT_GOAL_MINUTES = 30;
  * Plan the factory that produces every missing goal item in proportion, finishing them all at the same time.
  * opts.minutes: finish in about this many minutes (a smaller factory); if the nodes can't make it that fast, or
  * minutes is not given, the factory is as fast as the nodes allow.
+ * opts.maxPowerMW: also slow it down until the factory runs on this much power (your free power).
  * Items that cannot be made with your unlocks / selected nodes are reported and left out.
  */
-export function planForGoals(gd, model, request, needsInfo, { minutes } = {}) {
+export function planForGoals(gd, model, request, needsInfo, { minutes, maxPowerMW } = {}) {
   const missing = needsInfo.needs.filter((n) => n.missing > 0);
   if (!missing.length) return { ok: true, nothingNeeded: true, needs: needsInfo };
   // which items can be produced at all with these rules?
@@ -56,17 +57,29 @@ export function planForGoals(gd, model, request, needsInfo, { minutes } = {}) {
   const fastest = 1 / goal.goalT;
   const wanted = Number(minutes) > 0 ? Number(minutes) : null;
   // slower than the nodes could go = fewer machines and nodes; never faster than they allow
-  const byTime = wanted !== null && wanted > fastest;
-  const t = byTime ? 1 / wanted : goal.goalT * 0.999;
-  const targets = producible.map((n) => ({ item: n.item, rate: Math.round(n.missing * t * 1000) / 1000 })).filter((x) => x.rate > 0);
-  const plan = planProduction(gd, model, { ...request, targets: [...(request.targets || []), ...targets], goalVector: undefined });
+  let finish = wanted !== null && wanted > fastest ? wanted : null;
+  let limitedBy = finish ? 'time' : 'nodes';
+  const build = (t) => {
+    const targets = producible.map((n) => ({ item: n.item, rate: Math.round(n.missing * t * 1000) / 1000 })).filter((x) => x.rate > 0);
+    return { targets, plan: planProduction(gd, model, { ...request, targets: [...(request.targets || []), ...targets], goalVector: undefined }) };
+  };
+  let t = finish ? 1 / finish : goal.goalT * 0.999;
+  let { targets, plan } = build(t);
+  // too much for your power: slow down until it fits (power falls about in step with the rate; a bit extra for whole machines)
+  for (let k = 0; k < 6 && maxPowerMW > 0 && plan.ok && plan.totals.powerMW > maxPowerMW; k++) {
+    finish = (1 / t) * (plan.totals.powerMW / maxPowerMW) * 1.03;
+    limitedBy = 'power';
+    t = 1 / finish;
+    ({ targets, plan } = build(t));
+  }
   return {
     ok: plan.ok,
     plan,
-    minutes: Math.round((byTime ? wanted : fastest) * 10) / 10,
+    minutes: Math.round((finish || fastest) * 10) / 10,
     fastestMinutes: Math.round(fastest * 10) / 10,
     wantedMinutes: wanted,
-    limitedBy: byTime ? 'time' : 'nodes',
+    limitedBy,
+    powerBudgetMW: maxPowerMW > 0 ? Math.round(maxPowerMW) : null,
     targets: targets.map((x) => ({ ...x, name: itemName(gd, x.item) })),
     needs: needsInfo,
     blocked,

@@ -4,6 +4,8 @@ node_modules/
 # generated per machine — derived from YOUR game install and saves, never publish
 cache/
 output/
+# plans you saved (they can contain your save name)
+saved/
 
 # local settings (paths on your PC)
 sfp.config.json

@@ -46,9 +46,10 @@ const planShape = {
   nearest_nodes: z.number().int().optional().describe('Use only the N nearest nodes to the site'),
   node_resources: z.array(z.string()).optional().describe('With nearest_nodes: only count nodes of these resources, e.g. ["Iron Ore"]'),
   rebuild: z.boolean().optional().describe('Treat nodes that already have a miner as fully free (their old consumers will be dismantled; the miner is kept)'),
-  goal: z.enum(['targets', 'milestones', 'active', 'items']).optional().describe('How amounts are chosen. targets: the rates you give. milestones: AUTOMATIC — everything the milestones the player can buy now (+ next Space Elevator phase) still need beyond storage, sized to finish all of it in goal_minutes (default 30). active: same for the active milestone only. items: AUTOMATIC — the auto_items as much as the nodes allow. Use milestones/items when the player does not know how much to make.'),
+  goal: z.enum(['targets', 'milestones', 'active', 'items']).optional().describe('How amounts are chosen. targets: the rates you give. milestones: AUTOMATIC — everything the milestones the player can buy now (+ next Space Elevator phase) still need beyond storage, sized by goal_minutes (default: what the free power can run). active: same for the active milestone only. items: AUTOMATIC — the auto_items as much as the nodes allow. Use milestones/items when the player does not know how much to make.'),
   auto_items: z.array(z.string()).optional().describe('With goal "items": items to make without fixed rates (amounts chosen automatically)'),
-  goal_minutes: z.union([z.number().positive(), z.literal('fastest')]).optional().describe('With goal milestones/active: finish everything in about this many minutes (default 30: a modest factory). Shorter = bigger factory. "fastest" = as big as the nodes allow (usually far too big)'),
+  save_as: z.string().max(60).optional().describe('Also keep this result under this name (only when the player asks to save it): a report.html that opens in any browser, listed in the Saved tab of the web UI'),
+  goal_minutes: z.union([z.number().positive(), z.literal('fastest'), z.literal('auto')]).optional().describe('With goal milestones/active: "auto" (default) = as big as the free power of the player can run, never faster than 30 min; a number = finish everything in about that many minutes (shorter = bigger factory, may need more power); "fastest" = as big as the nodes allow (usually far too big)'),
 };
 const toRequest = (a) => ({
   targets: a.targets || [],
@@ -81,6 +82,12 @@ const areaShape = {
   title: z.string().optional(),
   blueprint: z.boolean().optional().describe('Also write in-game blueprint files (.sbp), one per floor, verified by re-reading them'),
   install_blueprint_session: z.string().optional().describe('Copy the blueprints into the game\'s blueprint folder for this session name (only when the player asks)'),
+};
+/** save_as: keep the result in saved/ and say where. */
+const keep = (kind, a, settings, r) => {
+  if (!a.save_as) return r;
+  const s = A.saveResult(kind, a.save_as, settings, r);
+  return { ...r, markdown: `${r.markdown}\n\n**Saved** as "${a.save_as}": ${s.data.report}` };
 };
 const toArea = (a) => ({ mode: a.mode, width: a.width, length: a.length, unit: a.unit, floors: a.floors, foundationThickness: a.foundation_thickness, title: a.title, blueprint: a.blueprint, installSession: a.install_blueprint_session });
 
@@ -133,13 +140,13 @@ server.registerTool('plan_production', {
   title: 'Plan production',
   description: 'Optimal production chain using ONLY unlocked recipes and buildings, raw supply from real nodes (purity × miner tier, capped by the best belt), machine counts and clock speeds, node assignments, belts needed per connection, power and build cost.',
   inputSchema: planShape,
-}, wrap((a) => A.planAction(toRequest(a))));
+}, wrap((a) => keep('plan', a, { request: toRequest(a) }, A.planAction(toRequest(a)))));
 
 server.registerTool('design_factory', {
   title: 'Design a factory layout',
   description: 'Plan + buildable layout sketch: machine rows with splitter/merger manifolds, a belt corridor routing every connection, floors with lifts, foundations, bill of materials vs. your storage, and a step-by-step build order. Writes an HTML sketch + SVG per floor + JSON and returns the paths.',
   inputSchema: { ...planShape, ...areaShape },
-}, wrap((a) => A.designAction(toRequest(a), toArea(a))));
+}, wrap((a) => keep('design', a, { request: toRequest(a), area: toArea(a) }, A.designAction(toRequest(a), toArea(a)))));
 
 server.registerTool('milestone_needs', {
   title: 'What do I still need?',
@@ -152,7 +159,7 @@ server.registerTool('milestone_needs', {
 
 server.registerTool('plan_rebuild', {
   title: 'Plan a tear-down and rebuild',
-  description: 'For replacing temporary builds: plans the new factory (default goal: finish the next milestones in ~30 min from the chosen nodes; set goal_minutes to change), lays it out, then compares its cost with storage + what dismantling the old lines refunds (100%). Lists shortages and how to cover each (wait for current production, hand-craft, or build a small affordable stage 1 first) and gives the order of work: what to craft first, when to dismantle, what to build first.',
+  description: 'For replacing temporary builds: plans the new factory (default goal: the next milestones, sized to the power that is free once the old lines are gone; set goal_minutes to change), lays it out, then compares its cost with storage + what dismantling the old lines refunds (100%). Lists shortages and how to cover each (wait for current production, hand-craft, or build a small affordable stage 1 first) and gives the order of work: what to craft first, when to dismantle, what to build first.',
   inputSchema: {
     ...planShape,
     dismantle: z.union([z.enum(['near', 'all', 'none']), z.array(z.number().int())]).optional().describe('Which old lines to tear down: near (default, within dismantle_radius of the site), all, none, or line numbers from the result'),
@@ -160,7 +167,10 @@ server.registerTool('plan_rebuild', {
     dismantle_power: z.boolean().optional().describe('Also dismantle lines that feed generators (default false)'),
     ...areaShape,
   },
-}, wrap((a) => A.rebuildAction(toRequest(a), toArea(a), { scope: a.dismantle, radius: a.dismantle_radius, includePower: a.dismantle_power })));
+}, wrap((a) => {
+  const scope = { scope: a.dismantle, radius: a.dismantle_radius, includePower: a.dismantle_power };
+  return keep('rebuild', a, { request: { ...toRequest(a), rebuild: true }, area: toArea(a), scope }, A.rebuildAction(toRequest(a), toArea(a), scope));
+}));
 
 server.registerTool('make_blueprint', {
   title: 'Make an in-game blueprint',
@@ -184,12 +194,26 @@ server.registerTool('make_blueprint', {
   const installSession = a.install_blueprint_session;
   if (source === 'module') {
     if (!a.recipe) throw new Error('Give a recipe (or item) for the module, e.g. "Iron Ingot".');
-    return A.blueprintAction({ source, name: a.name, installSession, module: { recipe: a.recipe, machines: a.machines, clock: a.clock, rate: a.rate, beltTier: a.belt_tier, gap: a.gap } });
+    const body = { source, name: a.name, module: { recipe: a.recipe, machines: a.machines, clock: a.clock, rate: a.rate, beltTier: a.belt_tier, gap: a.gap } };
+    return keep('blueprint', a, body, A.blueprintAction({ ...body, installSession }));
   }
   const request = toRequest(a);
   if (source !== 'plan') request.rebuild = true;
-  return A.blueprintAction({ source, name: a.name, installSession, request, area: toArea(a), scope: { scope: a.dismantle, radius: a.dismantle_radius } });
+  const body = { source, name: a.name, request, area: toArea(a), scope: { scope: a.dismantle, radius: a.dismantle_radius } };
+  return keep('blueprint', a, body, A.blueprintAction({ ...body, installSession }));
 }));
+
+server.registerTool('list_saved', {
+  title: 'Saved plans',
+  description: 'Plans, designs, rebuilds and blueprints the player kept (newest first), with the settings each was made with — pass those settings to the planning tools to plan it again with the current save.',
+  inputSchema: {},
+}, async () => {
+  try {
+    const r = A.savedListAction();
+    const detail = r.data.map((x) => `- **${x.name}** (${x.kind}, ${String(x.created).slice(0, 10)}): settings ${JSON.stringify(x.settings)}`).join('\n');
+    return text(`${r.markdown}${detail ? `\n\n${detail}` : ''}`);
+  } catch (e) { return { content: [{ type: 'text', text: `Error: ${e.message}` }], isError: true }; }
+});
 
 server.registerTool('list_lines', {
   title: 'Existing production lines',

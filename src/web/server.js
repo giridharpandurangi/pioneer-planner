@@ -3,7 +3,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { OUTPUT_DIR, listSaves } from '../config.js';
+import { OUTPUT_DIR, SAVED_DIR, listSaves } from '../config.js';
 import * as A from '../core/actions.js';
 import { currentModel, gameData } from '../core/session.js';
 
@@ -102,7 +102,7 @@ const routes = {
   'POST /api/plan': (b) => A.planAction(b.request || b),
   'POST /api/design': (b) => {
     const r = A.designAction(b.request || {}, noInstall(b.area));
-    if (r.data?.files) r.data.url = '/output/' + path.relative(OUTPUT_DIR, r.data.files.html).split(path.sep).join('/');
+    if (r.data?.files) { r.data.url = '/output/' + path.relative(OUTPUT_DIR, r.data.files.html).split(path.sep).join('/'); r.data.dir = path.basename(r.data.files.dir); }
     return r;
   },
   'GET /api/context': () => A.contextAction(),
@@ -114,11 +114,16 @@ const routes = {
   'POST /api/upgrade-plan': (b) => A.upgradePlanAction(b.request || {}, b.tiers || {}),
   'POST /api/rebuild': (b) => {
     const r = A.rebuildAction(b.request || {}, noInstall(b.area), b.scope || {});
-    if (r.data?.files) r.data.url = '/output/' + path.relative(OUTPUT_DIR, r.data.files.html).split(path.sep).join('/');
+    if (r.data?.files) { r.data.url = '/output/' + path.relative(OUTPUT_DIR, r.data.files.html).split(path.sep).join('/'); r.data.dir = path.basename(r.data.files.dir); }
     return r;
   },
   'GET /api/bp-options': () => A.blueprintOptionsAction(),
   'POST /api/blueprint': (b) => A.blueprintAction({ source: b.source, module: b.module || {}, request: b.request || {}, area: noInstall(b.area), scope: b.scope || {}, name: b.name }),
+  // saved plans: kept in saved/, each with a report.html that opens in any browser
+  'POST /api/save': (b) => A.saveAction({ kind: String(b.kind || ''), name: String(b.name || ''), settings: b.settings && typeof b.settings === 'object' ? b.settings : {}, markdown: String(b.markdown || ''), dir: b.dir ? String(b.dir) : null }),
+  'GET /api/saved': () => A.savedListAction(),
+  'POST /api/saved-delete': (b) => A.savedDeleteAction(String(b.id || '')),
+  'POST /api/saved-open-folder': (b) => A.savedOpenFolderAction(b.id ? String(b.id) : null),
   'POST /api/blueprint-install': (b) => A.blueprintInstallAction({ files: Array.isArray(b.files) ? b.files.slice(0, 20).map(String) : [], session: knownSession(String(b.session || '')) }),
 };
 
@@ -133,6 +138,7 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { ok: true, data: r.data, markdown: r.markdown });
     }
     if (url.pathname.startsWith('/output/')) return serveFile(res, OUTPUT_DIR, decodeURIComponent(url.pathname.slice('/output/'.length)));
+    if (url.pathname.startsWith('/saved/')) return serveFile(res, SAVED_DIR, decodeURIComponent(url.pathname.slice('/saved/'.length)));
     return serveFile(res, PUBLIC, url.pathname === '/' ? 'index.html' : url.pathname.slice(1));
   } catch (e) {
     send(res, 200, { ok: false, error: e.message });

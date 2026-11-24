@@ -4,13 +4,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { exportBlueprints } from '../blueprint/build.js';
 import { DEFAULT_GOAL_MINUTES, milestoneNeeds, planForGoals } from '../planner/goals.js';
-import { productionGroups, rebuildCheck } from '../rebuild/rebuild.js';
+import { productionGroups, rebuildCheck, selectDismantle } from '../rebuild/rebuild.js';
 import { guidePage, renderGuide } from '../rebuild/guide.js';
 import { upgradeOptions } from '../analysis/upgrade.js';
 import { comparePlans, listLines, tierChoices, upgradeLine } from '../upgrade/upgrade.js';
 import { verifyBlueprint } from '../blueprint/verify.js';
 import { previewBlueprintSvg } from '../blueprint/preview.js';
 import { modulePlan } from '../blueprint/module.js';
+import { deleteSaved, listSaved, openSavedFolder, savePlan } from './saved.js';
 import { OUTPUT_DIR, ensureDir, listSaves } from '../config.js';
 import { isFluid, itemName, recipeRates, resolveItem } from '../gamedata/loader.js';
 // (resolveItem / itemName are also used by resolvePlan for automatic amounts)
@@ -139,13 +140,18 @@ function resolvePlan(gd, m, request) {
   } else {
     needsInfo = milestoneNeeds(gd, m, { scope: mode === 'active' ? 'active' : request.goalScope || 'tier' });
   }
-  // milestone modes are sized to a finish time; "items" means as much as the nodes allow
-  const gm = request.goalMinutes;
+  // milestone modes are sized to a finish time; "items" means as much as the nodes allow.
+  // 'auto' (default): what your free power can run, but never faster than 30 min
+  const gm = request.goalMinutes ?? 'auto';
+  const auto = mode !== 'items' && (gm === 'auto' || gm === '' || gm === null);
   const minutes = mode === 'items' || gm === 'fastest' || gm === 0 || gm === '0' ? undefined : Number(gm) > 0 ? Number(gm) : DEFAULT_GOAL_MINUTES;
-  const g = planForGoals(gd, m, { ...request, targets: fixed }, needsInfo, { minutes });
+  const freeMW = request.powerBudgetMW ?? (m.power.capacityMW * 0.95 - m.power.consumptionMW);
+  const maxPowerMW = auto && freeMW > 1 ? freeMW : undefined;
+  const g = planForGoals(gd, m, { ...request, targets: fixed }, needsInfo, { minutes, maxPowerMW });
+  if (g.ok) g.noFreePower = auto && !maxPowerMW;
   if (g.nothingNeeded) return { error: { data: g, markdown: `Nothing is missing: your storage already has everything ${mode === 'active' ? 'your active milestone' : 'the milestones you can buy now'} need${g.needs?.goals?.length ? ` (${g.needs.goals.map((x) => x.name).join(', ')})` : ''}. Go submit them at the HUB, or pick items / give amounts instead.` } };
   if (!g.ok) return { error: { data: g, markdown: `**No plan possible.** ${g.message}` } };
-  return { plan: g.plan, goal: { mode, minutes: g.minutes, fastestMinutes: g.fastestMinutes, wantedMinutes: g.wantedMinutes, limitedBy: g.limitedBy, targets: g.targets, needs: g.needs, blocked: g.blocked } };
+  return { plan: g.plan, goal: { mode, minutes: g.minutes, fastestMinutes: g.fastestMinutes, wantedMinutes: g.wantedMinutes, limitedBy: g.limitedBy, powerBudgetMW: g.powerBudgetMW, noFreePower: g.noFreePower, targets: g.targets, needs: g.needs, blocked: g.blocked } };
 }
 
 export function planAction(request) {
@@ -172,7 +178,7 @@ export function designAction(request, area = {}) {
   return { data: { plan, goal, layout: stripElements(layout), files, blueprints }, markdown: fmt.goalHeader(goal) + fmt.design(plan, layout, files) + (blueprints ? fmt.blueprints(blueprints) : '') };
 }
 
-const goalTitle = (goal) => (!goal ? undefined : goal.mode === 'items' ? `Auto mix: ${goal.targets.map((t) => t.name).join(', ')}`.slice(0, 60) : `Milestone factory (${goal.minutes} min to finish)`);
+const goalTitle = (goal) => (!goal ? undefined : goal.mode === 'items' ? `Auto mix: ${goal.targets.map((t) => t.name).join(', ')}`.slice(0, 60) : `Milestone factory (${fmt.duration(goal.minutes)} to finish)`);
 
 /** Write one blueprint per floor, re-read each to verify it, optionally copy into the game's blueprint folder. */
 function blueprintsFor(gd, plan, layout, dir, m, installSession) {
@@ -302,7 +308,7 @@ export function blueprintAction({ source = 'module', module = {}, request = {}, 
     designer: designerFit(b.sizeM),
     };
   });
-  const data = { source, summary, blueprints, notes: bp.notes, installed: bp.installed, installFolder: bp.installFolder, sketchUrl: sketch ? outputUrl(sketch) : null, session: m.header.sessionName };
+  const data = { source, summary, blueprints, dir: path.basename(path.dirname(bp.dir)), notes: bp.notes, installed: bp.installed, installFolder: bp.installFolder, sketchUrl: sketch ? outputUrl(sketch) : null, session: m.header.sessionName };
   return { data, markdown: `${summary}\n\n${fmt.blueprints({ ...bp, list: bp.list })}` };
 }
 
@@ -352,7 +358,9 @@ export function upgradesAction() {
 export function rebuildAction(request = {}, area = {}, scope = {}) {
   const gd = gameData();
   const m = currentModel();
-  const req = { rebuild: true, ...request };
+  // what the old lines use comes free when they are torn down: the new factory may use that power too
+  const freedMW = selectDismantle(gd, m, scope).powerFreedMW || 0;
+  const req = { rebuild: true, powerBudgetMW: m.power.capacityMW * 0.95 - m.power.consumptionMW + freedMW, ...request };
   const r = resolvePlan(gd, m, req);
   if (r.error) return r.error;
   const { plan, goal } = r;
@@ -371,7 +379,7 @@ export function rebuildAction(request = {}, area = {}, scope = {}) {
   files.guide = guideFile;
   const guideHtml = renderGuide(check.timeline, guideOpts);
   return {
-    data: { plan, goal: goal && { minutes: goal.minutes, fastestMinutes: goal.fastestMinutes, wantedMinutes: goal.wantedMinutes, limitedBy: goal.limitedBy, targets: goal.targets, needs: goal.needs, blocked: goal.blocked }, check, files, blueprints, guideHtml },
+    data: { plan, goal: goal && { minutes: goal.minutes, fastestMinutes: goal.fastestMinutes, wantedMinutes: goal.wantedMinutes, limitedBy: goal.limitedBy, powerBudgetMW: goal.powerBudgetMW, noFreePower: goal.noFreePower, targets: goal.targets, needs: goal.needs, blocked: goal.blocked }, check, files, blueprints, guideHtml },
     markdown: fmt.rebuild(plan, goal, check, layout, files) + `\n**Visual step-by-step guide:** ${guideFile}` + (blueprints ? fmt.blueprints(blueprints) : ''),
   };
 }
@@ -473,3 +481,38 @@ function stripElements(layout) {
 }
 
 const round = (x) => Math.round(x * 100) / 100;
+
+// ------------------------------------------------------------------------------------------------ saved plans
+
+const saveInfo = () => { try { const h = currentModel().header; return { saveName: h.saveName, sessionName: h.sessionName }; } catch { return {}; } };
+
+/** Save a result the web UI already has (its text + the output folder it was written to). */
+export function saveAction({ kind, name, settings, markdown, dir } = {}) {
+  const s = savePlan({ kind, name, settings, markdown, dir: dir || null, save: saveInfo() });
+  return { data: { id: s.id, report: s.report, folder: s.folder, reportUrl: savedUrl(s.id, 'report.html') }, markdown: `Saved "${s.meta.name}": ${s.report}` };
+}
+
+/** Save the result of an action (CLI / AI tools). kind: plan | design | rebuild | blueprint. */
+export function saveResult(kind, name, settings, result) {
+  const d = result?.data || {};
+  const dir = d.files?.dir || (d.blueprints?.[0]?.file ? path.join(OUTPUT_DIR, d.blueprints[0].file.split('/')[0]) : null);
+  if (d.ok === false || (!dir && kind !== 'plan')) throw new Error('Nothing to save: this request did not produce a result.');
+  return saveAction({ kind, name, settings, markdown: result.markdown, dir });
+}
+
+const savedUrl = (id, file) => `/saved/${encodeURIComponent(id)}/${file}`;
+
+export function savedListAction() {
+  const list = listSaved().map((x) => ({ ...x, reportUrl: savedUrl(x.id, 'report.html') }));
+  return { data: list, markdown: fmt.savedList(list) };
+}
+
+export function savedDeleteAction(id) {
+  const folder = deleteSaved(id);
+  return { data: { deleted: folder }, markdown: `Deleted ${folder}` };
+}
+
+export function savedOpenFolderAction(id) {
+  const folder = openSavedFolder(id);
+  return { data: { folder }, markdown: `Opened ${folder}` };
+}

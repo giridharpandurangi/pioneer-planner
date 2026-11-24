@@ -35,7 +35,7 @@ All data comes from your machine:
 ## Privacy & safety
 
 - **Nothing leaves your PC.** The tool makes no network requests: no telemetry, no accounts, no uploads.
-- It only **reads** your saves and the game's Docs file. It only **writes** inside its own `output/` and `cache/` folders. The one exception is blueprint install (`--install`), which copies `.sbp` files into the game's blueprint folder, and only when you ask.
+- It only **reads** your saves and the game's Docs file. It only **writes** inside its own `output/`, `cache/` and `saved/` folders. The one exception is blueprint install (`--install`), which copies `.sbp` files into the game's blueprint folder, and only when you ask.
 - The web UI listens on `127.0.0.1` only. It refuses requests from other websites and only loads saves from your save folders. Its *Install into the game* button only copies blueprints the planner made (from `output/`) into an existing blueprint folder or your save's session folder, and never overwrites a blueprint.
 - `output/` (your sketches) and `cache/` (data derived from your game install and saves) are git-ignored and should never be published. The shipped `data/` files contain only building geometry: no names, account IDs or save names.
 
@@ -105,15 +105,16 @@ Then just talk to it, e.g.:
 - "My base is temporary, I want to rebuild it with the 3 iron nodes near the HUB" (or the **rebuild_base** prompt)
 
 - "Make me a blueprint of 3 smelters on iron ingots" / "a blueprint for 60 screws a minute"
+- "Save that as *Coal power line*" (planning tools take `save_as`; `list_saved` shows what you kept and how to run it again)
 
-**Tools the AI gets:** `list_saves`, `load_save`, `factory_status`, `suggest_improvements`, `get_unlocks`, `find_nodes`, `item_info`, `plan_production`, `design_factory`, `milestone_needs`, `plan_rebuild`, `make_blueprint`, `list_lines`, `upgrade_line`, `compare_upgrade`, `upgrade_options`, `export_context`.
+**Tools the AI gets:** `list_saves`, `load_save`, `factory_status`, `suggest_improvements`, `get_unlocks`, `find_nodes`, `item_info`, `plan_production`, `design_factory`, `milestone_needs`, `plan_rebuild`, `make_blueprint`, `list_saved`, `list_lines`, `upgrade_line`, `compare_upgrade`, `upgrade_options`, `export_context`.
 
 ## Rebuild planner (replacing temporary builds)
 
 Use it when you want to tear down what you have and build something better, without getting stuck halfway because you ran out of materials. CLI: `node bin/sfp.js rebuild --nearest 3 --node-res "Iron Ore"`. Web: the **Rebuild** tab. AI: `plan_rebuild`.
 
 1. **Pick nodes.** Tick them in the web UI, pass `--nodes` / `--nearest`, or let the AI ask you. Nodes that already have a miner count as fully free, and the miner is kept.
-2. **Pick a goal.** By default it builds for *everything your next milestones and the next Space Elevator phase still need* (minus what's in storage), sized to finish in about 30 minutes (pick 15 min to 2 hours, or as fast as the nodes allow). Or give your own targets.
+2. **Pick a goal.** By default it builds for *everything your next milestones and the next Space Elevator phase still need* (minus what's in storage), sized so the power that's free once the old lines are gone can run it (or pick a finish time from 15 min to 2 hours, or as fast as the nodes allow). Or give your own targets.
 3. **It checks the money.** The new build's cost (machines, splitters, mergers, foundations, poles, new miners, belts at ~1 unit per 2 m) is compared with your storage plus what dismantling the old lines refunds (100%), including items sitting in machine buffers.
 4. **It covers every shortage** with the fastest option:
    - wait for your current factory;
@@ -165,6 +166,17 @@ CLI: `node bin/sfp.js blueprint module "Iron Ingot" --machines 3` (also `--rate 
 - **Not included:** foundations, power poles and lines, lifts (multi-floor belts end where a lift goes), miners and pipes.
 - **Port positions** come from real belts in your saves (`data/ports.json`). To teach it buildings you haven't belted yet, run `node tools/learn.js "<a save that has them>"` once.
 
+## Saving plans
+
+Under every result on **Plan & Design**, **Rebuild** and **Blueprints** there's a **💾 Save** bar: give it a name and press Save. Each saved plan is a folder in `saved/` with:
+- **`report.html`**: everything in one page (settings, plan, rebuild guide, layout sketch, blueprint previews). It opens in any browser, also when the planner isn't running, so you can keep it, share it, or print it;
+- `sketch.html`, `guide.html` and the blueprint files (`blueprints/*.sbp` + `.sbpcfg`);
+- `saved.json`: the settings it was made with.
+
+The **Saved** tab lists them, newest first: **Open report**, **Download report**, **Show folder**, **Delete** (asks first), and **Load settings**. That puts the same choices (goal, finish time, items, nodes, build area, blueprint options) back into the right tab, so you can plan it again with your current save. Reports keep the numbers from when you saved them.
+
+CLI: add `--save-as "My plan"` to `plan`, `design`, `rebuild` or `blueprint`; `node bin/sfp.js saved` lists what you kept. AI: `save_as` on the planning tools, `list_saved`.
+
 ## Use with other AIs
 
 - **Any MCP-capable client** (local LLM front-ends, IDE assistants, …): point it at `node C:\path\to\pioneer-planner\src\mcp\server.js` (stdio).
@@ -205,13 +217,13 @@ node bin/sfp.js help
 ```
 
 **Don't know how much to make?** Leave the amounts out. `plan`, `design` and `rebuild` (and the web UI's *How much?* box, and the AI tools via `goal`) can choose them for you:
-- `--goal milestones`: whatever your next milestones and Space Elevator phase still need beyond storage, sized to finish it all in about 30 minutes. This is the default when you give no items. `--minutes 60` builds a smaller factory, `--minutes 15` a bigger one. `--minutes fastest` uses every node in range, which is usually far too big: on a Tier 2 save it planned 228 machines instead of 18.
+- `--goal milestones`: whatever your next milestones and Space Elevator phase still need beyond storage. This is the default when you give no items. By default (`--minutes auto`) the factory is as big as your **free power** can run, and never planned faster than 30 minutes; the result tells you how long that takes and how fast your nodes could go. `--minutes 60` sizes it to finish in about an hour instead, `--minutes 15` bigger. `--minutes fastest` uses every node in range, which is usually far too big: on a Tier 2 save it planned 228 machines instead of 18.
 - `--goal active`: the same, for the active milestone only.
 - `"Iron Plate" "Rotor"` (no `:rate`): these items, as much as your nodes allow, mixed in the ratio your milestones need them.
 
 Combine any of these with `--nodes` / `--nearest` (or the node checkboxes in the web UI) to use only certain nodes. Add `--rebuild` to count the nodes your miners sit on as free.
 
-Add `--save "name"` to any command to use a different save. Sketches are written to `output/<date>-<name>/` (`index.html` + one SVG per floor + `layout.json`).
+Add `--save "name"` to any command to use a different save. Sketches are written to `output/<date>-<name>/` (`index.html` + one SVG per floor + `layout.json`). Add `--save-as "My plan"` to keep a result (see *Saving plans*); `node bin/sfp.js saved` lists them.
 
 ## How "realistic" works
 
@@ -250,7 +262,7 @@ data/                    learned port positions + blueprint object templates
 launcher/                one-click start/stop scripts, Desktop/Start-menu shortcuts, app icon
 tools/                   learn.js (learn from big saves), screenshots.js (README images), make-icon.js, dump helpers
 docs/screenshots/        README images
-src/core/                shared actions + markdown formatting
+src/core/                shared actions, markdown formatting, saved plans + reports
 src/mcp/server.js        MCP server
 src/web/                 local web UI + JSON API
 test/                    end-to-end tests against your newest save

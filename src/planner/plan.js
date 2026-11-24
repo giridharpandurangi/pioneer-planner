@@ -180,8 +180,10 @@ export function planProduction(gd, model, request) {
   }
 
   if (goalVector.length) {
-    // maximize t: produce every goal item at t × its remaining amount per minute (finishes all of them together in 1/t min)
-    variables['goal:t'] = { cost: 1 };
+    // maximize t: produce every goal item at t × its remaining amount per minute (finishes all of them together in 1/t min).
+    // t gets small when the amounts are large (979 Smart Plating → t ≈ 0.1), so weigh it by the total amount: otherwise the
+    // small resource costs outweigh it and "build nothing" (t = 0) wins. Only t is used from this solve.
+    variables['goal:t'] = { cost: 1000 * goalVector.reduce((a, g) => a + g.amount, 0) };
     for (const g of goalVector) {
       variables['goal:t'][g.item] = -g.amount;
       constraints[g.item] = constraints[g.item] || { min: 0 };

@@ -49,6 +49,8 @@ textarea{width:100%;height:60vh}.hint{color:var(--muted);font-size:12px}
 .bpcard{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:12px 0}
 .bpcard h3{margin:0 0 4px;font-size:16px}.bpfacts{display:flex;flex-wrap:wrap;gap:6px 16px;color:var(--muted);font-size:13px;margin:4px 0 10px}.bpfacts b{color:var(--text)}
 .pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line)}.pill.ok{color:var(--ok);border-color:#2f5d3a}.pill.bad{color:var(--bad);border-color:#7f1d1d}.pill.mid{color:var(--mid);border-color:#78501a}
+.savebar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:8px;padding:8px 12px;margin:10px 0}
+.savebar input{flex:1;min-width:180px;max-width:420px}
 a.btn{display:inline-block;text-decoration:none;color:var(--text);background:#232a35;border:1px solid var(--line);border-radius:6px;padding:6px 10px}a.btn:hover{filter:brightness(1.15)}
 </style>
 </head>
@@ -64,6 +66,7 @@ a.btn{display:inline-block;text-decoration:none;color:var(--text);background:#23
   <button data-tab="plan">Plan &amp; Design</button>
   <button data-tab="rebuild">Rebuild</button>
   <button data-tab="blueprints">Blueprints</button>
+  <button data-tab="saved">Saved</button>
   <button data-tab="upgrade">Upgrade</button>
   <button data-tab="nodes">Nodes</button>
   <button data-tab="item">Item lookup</button>
@@ -81,7 +84,7 @@ a.btn{display:inline-block;text-decoration:none;color:var(--text);background:#23
           <option value="items">Automatic: these items, as much as my nodes allow</option>
           <option value="targets">I'll type the amounts</option>
         </select></div>
-        <div class="row" id="minutesRow"><label>Finish in</label><select id="goalMinutes"><option value="15">~15 min (bigger factory)</option><option value="30" selected>~30 min</option><option value="60">~1 hour (smaller)</option><option value="120">~2 hours (smallest)</option><option value="fastest">as fast as my nodes allow (huge)</option></select></div>
+        <div class="row" id="minutesRow"><label>Finish in</label><select id="goalMinutes"><option value="auto" selected>auto: what my free power can run</option><option value="15">~15 min (bigger factory)</option><option value="30">~30 min</option><option value="60">~1 hour (smaller)</option><option value="120">~2 hours (smallest)</option><option value="fastest">as fast as my nodes allow (huge)</option></select></div>
         <div id="goalHint" class="hint"></div>
         <div id="targetsWrap">
           <div id="targets"></div>
@@ -115,7 +118,7 @@ a.btn{display:inline-block;text-decoration:none;color:var(--text);background:#23
       <fieldset><legend>1 · Nodes to use (none ticked = any node nearby)</legend><div id="rbNodes" class="hint">Loading nearby nodes…</div></fieldset>
       <fieldset><legend>2 · Goal &amp; tear-down</legend>
         <div class="row"><label>Build for</label><select id="rbGoal"><option value="tier">everything my next milestones + space elevator need</option><option value="active">only my active milestone</option><option value="targets">the targets on the Plan tab</option></select></div>
-        <div class="row" id="rbMinutesRow"><label>Finish in</label><select id="rbMinutes"><option value="15">~15 min (bigger factory)</option><option value="30" selected>~30 min</option><option value="60">~1 hour (smaller)</option><option value="120">~2 hours (smallest)</option><option value="fastest">as fast as my nodes allow (huge)</option></select></div>
+        <div class="row" id="rbMinutesRow"><label>Finish in</label><select id="rbMinutes"><option value="auto" selected>auto: what my free power can run</option><option value="15">~15 min (bigger factory)</option><option value="30">~30 min</option><option value="60">~1 hour (smaller)</option><option value="120">~2 hours (smallest)</option><option value="fastest">as fast as my nodes allow (huge)</option></select></div>
         <div class="row"><button id="rbNeeds">What do I still need?</button></div>
         <div class="row"><label>Dismantle</label><select id="rbScope"><option value="near">old lines within</option><option value="all">all old lines</option><option value="none">nothing</option></select><input type="number" id="rbRadius" value="250" style="width:80px"> m of HUB</div>
         <div class="row"><label><input type="checkbox" id="rbPower"> also lines that feed my power</label></div>
@@ -166,6 +169,11 @@ a.btn{display:inline-block;text-decoration:none;color:var(--text);background:#23
       </fieldset>
     </div>
     <div id="bpOut"></div>
+  </section>
+  <section id="saved">
+    <p class="hint">Plans, designs, rebuilds and blueprints you saved. Each one is a folder with a <b>report.html</b> that opens in any browser, even when the planner isn't running. <b>Load settings</b> puts the same choices back, so you can plan it again with your current save.</p>
+    <div class="row"><button id="savedRefresh">↻ Refresh</button><button id="savedFolderBtn">📁 Open the saved folder</button></div>
+    <div id="savedOut"><p class="hint">Loading…</p></div>
   </section>
   <section id="upgrade">
     <p class="hint">See what better belts and miners give you — also for tiers you have not unlocked yet, so you can plan ahead.</p>
@@ -220,51 +228,9 @@ a.btn{display:inline-block;text-decoration:none;color:var(--text);background:#23
 <datalist id="itemsList"></datalist>
 <datalist id="bpRecipeList"></datalist>
 <datalist id="rawList"><option>Iron Ore</option><option>Copper Ore</option><option>Limestone</option><option>Coal</option><option>Caterium Ore</option><option>Raw Quartz</option><option>Sulfur</option><option>Bauxite</option><option>Uranium</option><option>Crude Oil</option><option>SAM</option><option>Nitrogen Gas</option><option>Water</option></datalist>
+<script src="markdown.js"></script>
 <script>
 const $ = (id) => document.getElementById(id);
-const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
-
-function md(src) {
-  const lines = String(src || '').split('\n');
-  const out = [];
-  let i = 0;
-  const inline = (s) => esc(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/(^|\s)_(.+?)_(?=\s|$|[.,;:])/g, '$1<i>$2</i>').replace(/`(.+?)`/g, '<code>$1</code>')
-    .replace(/\[(high)\]/g, '<span class="sev-high">[high]</span>').replace(/\[(medium)\]/g, '<span class="sev-medium">[medium]</span>').replace(/\[(low)\]/g, '<span class="sev-low">[low]</span>');
-  while (i < lines.length) {
-    const l = lines[i];
-    if (/^\|/.test(l)) {
-      const rows = [];
-      while (i < lines.length && /^\|/.test(lines[i])) rows.push(lines[i++]);
-      const cells = (r) => r.replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
-      const head = cells(rows[0]);
-      const body = rows.slice(2).map(cells);
-      out.push(`<table><tr>${head.map((h) => `<th>${inline(h)}</th>`).join('')}</tr>${body.map((r) => `<tr>${r.map((c) => `<td>${inline(c)}</td>`).join('')}</tr>`).join('')}</table>`);
-      continue;
-    }
-    let m;
-    if (/^> /.test(l)) {
-      // quote block: one highlighted note
-      const q = [];
-      while (i < lines.length && /^> ?/.test(lines[i]) && lines[i].trim()) q.push(inline(lines[i++].replace(/^> ?/, '')));
-      out.push(`<div class="note">${q.join('<br>')}</div>`);
-      continue;
-    }
-    if ((m = l.match(/^(#{1,3}) (.*)/))) out.push(`<h${m[1].length}>${inline(m[2])}</h${m[1].length}>`);
-    else if (/^\s*[-*] /.test(l)) { const items = []; while (i < lines.length && /^\s*[-*] /.test(lines[i])) items.push(`<li>${inline(lines[i++].replace(/^\s*[-*] /, ''))}</li>`); out.push(`<ul>${items.join('')}</ul>`); continue; }
-    else if (/^\d+\. /.test(l)) {
-      const items = [];
-      while (i < lines.length && (/^\d+\. /.test(lines[i]) || /^\s{2,}\S/.test(lines[i]))) {
-        if (/^\d+\. /.test(lines[i])) items.push(inline(lines[i].replace(/^\d+\. /, '')));
-        else items[items.length - 1] += '<br>' + inline(lines[i].trim().replace(/^- /, '• '));
-        i++;
-      }
-      out.push(`<ol>${items.map((x) => `<li>${x}</li>`).join('')}</ol>`);
-      continue;
-    } else if (l.trim()) out.push(`<p>${inline(l)}</p>`);
-    i++;
-  }
-  return out.join('\n');
-}
 
 async function api(path, body) {
   const r = await fetch(path, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {});
@@ -282,6 +248,7 @@ document.querySelectorAll('#tabs button').forEach((b) => b.onclick = () => {
   if (b.dataset.tab === 'rebuild' && !$('rbNodes').dataset.loaded) loadRbNodes();
   if (b.dataset.tab === 'upgrade' && !$('upLine').dataset.loaded) loadUpgradeTab();
   if (b.dataset.tab === 'blueprints' && !bpOpts) loadBpTab();
+  if (b.dataset.tab === 'saved') loadSaved();
   if (b.dataset.tab === 'nodes') { if (!mapData) loadMap(); else drawMap(); }
   if (b.dataset.tab === 'brief' && !$('briefTxt').value) api('/api/context').then((j) => $('briefTxt').value = j.markdown).catch((e) => $('briefTxt').value = e.message);
 });
@@ -320,7 +287,7 @@ async function loadNodePicker(containerId, cls) {
 }
 const loadRbNodes = () => loadNodePicker('rbNodes', 'rbNode');
 const GOAL_HINTS = {
-  milestones: 'The tool adds up what your next milestones and Space Elevator phase still need (minus storage) and sizes the factory to finish all of it in the time you pick: shorter = more machines and nodes.',
+  milestones: 'The tool adds up what your next milestones and Space Elevator phase still need (minus storage) and sizes the factory so your free power can run it (never faster than ~30 min), or to finish in the time you pick: shorter = more machines, nodes and power.',
   active: 'Like above, but only for the milestone you have selected in the HUB.',
   items: 'Pick the items; leave the amount blank and the tool makes as much as your nodes allow (the mix follows what your milestones need). You can still type an amount for some of them.',
   targets: 'Type how many per minute you want of each item.',
@@ -403,8 +370,7 @@ async function deepLink(qp) {
     syncBpBy();
     if (qp.get('belt')) $('bpBelt').value = qp.get('belt');
     if (qp.get('gap')) $('bpGap').value = qp.get('gap');
-    const k = BP_PRESETS.findIndex(([, r, n]) => r === $('bpRecipe').value && String(n) === $('bpMachines').value && $('bpBy').value === 'count');
-    $('bpPresets').querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.k === String(k)));
+    markBpPreset();
     if (qp.get('run') === '1') await $('bpMake').onclick();
   }
   const scroll = qp.get('scroll');
@@ -671,7 +637,8 @@ function rbBody() {
 $('rbBtn').onclick = async () => {
   $('rbOut').innerHTML = '<p class="hint">Planning the rebuild…</p>';
   try {
-    const j = await api('/api/rebuild', rbBody());
+    const settings = rbBody();
+    const j = await api('/api/rebuild', settings);
     if (!j.data?.guideHtml) return showResult($('rbOut'), j);
     // visual step-by-step guide first; the full text plan and the layout sketch below it
     const url = j.data.url;
@@ -679,18 +646,26 @@ $('rbBtn').onclick = async () => {
     $('rbOut').innerHTML = `<h2 style="margin:18px 0 6px">Order of work</h2>${guideUrl ? `<div class="row"><a href="${esc(guideUrl)}" target="_blank" style="color:var(--accent2)">Open the guide in its own tab ↗</a></div>` : ''}${j.data.guideHtml}`
       + `<details style="margin-top:16px"><summary style="cursor:pointer;color:var(--accent2)">Full text plan (materials, refunds, numbers)</summary><div class="md">${md(j.markdown)}</div></details>`
       + (url ? `<h2 style="margin:18px 0 6px">Layout sketch</h2><iframe src="${esc(url)}"></iframe>` : '');
+    if (j.data.dir) $('rbOut').prepend(saveBar('rebuild', goalName(j.data.goal, 'Rebuild').replace(/^Milestone rebuild/, 'Rebuild: milestone factory'), { settings, markdown: j.markdown, dir: j.data.dir }));
   } catch (e) { showErr($('rbOut'), e); }
 };
 $('planBtn').onclick = async () => {
   $('planOut').innerHTML = '<p class="hint">Planning…</p>';
-  try { $('planOut').innerHTML = `<div class="md">${md((await api('/api/plan', request())).markdown)}</div>`; } catch (e) { showErr($('planOut'), e); }
+  const settings = { request: request(), area: area() };
+  try {
+    const j = await api('/api/plan', settings.request);
+    $('planOut').innerHTML = `<div class="md">${md(j.markdown)}</div>`;
+    if (j.data?.ok && j.data.steps?.length) $('planOut').prepend(saveBar('plan', goalName(j.data.goal, 'Plan') === 'Plan' ? firstHeading(j.markdown) || 'Plan' : goalName(j.data.goal, 'Plan'), { settings, markdown: j.markdown }));
+  } catch (e) { showErr($('planOut'), e); }
 };
 $('designBtn').onclick = async () => {
   $('planOut').innerHTML = '<p class="hint">Designing…</p>';
   try {
-    const j = await api('/api/design', { request: request(), area: area() });
+    const settings = { request: request(), area: area() };
+    const j = await api('/api/design', settings);
     const url = j.data?.url;
     $('planOut').innerHTML = (url ? `<div class="row"><a href="${esc(url)}" target="_blank" style="color:var(--accent2)">Open sketch in a new tab ↗</a></div><iframe src="${esc(url)}"></iframe>` : '') + `<div class="md">${md(j.markdown)}</div>`;
+    if (j.data?.dir) $('planOut').prepend(saveBar('design', j.data.layout?.title || 'Design', { settings, markdown: j.markdown, dir: j.data.dir }));
   } catch (e) { showErr($('planOut'), e); }
 };
 // search ↔ map: results are numbered, ringed on the map (the rest dimmed), and the table rows fly to / pick them
@@ -777,6 +752,11 @@ async function loadBpTab() {
     if (!$('bpRecipe').value) $('bpPresets').querySelector('button[data-k="1"]')?.click();
   } catch (e) { showErr($('bpStatus'), e); }
 }
+/** Highlights the quick pick that matches the module fields (if any). */
+function markBpPreset() {
+  const k = BP_PRESETS.findIndex(([, r, n]) => r === $('bpRecipe').value && String(n) === $('bpMachines').value && $('bpBy').value === 'count');
+  $('bpPresets').querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.k === String(k)));
+}
 function syncBpBy() {
   const rate = $('bpBy').value === 'rate';
   $('bpCountRow').style.display = rate ? 'none' : '';
@@ -823,10 +803,10 @@ $('bpMake').onclick = async () => {
   if (body.source === 'module' && $('bpBy').value === 'rate' && !body.module.rate) return showErr($('bpOut'), 'Type how much per minute you want.');
   $('bpOut').innerHTML = `<p class="hint">${body.source === 'module' ? 'Making the blueprint…' : 'Planning and making the blueprint (this can take a few seconds)…'}</p>`;
   $('bpMake').disabled = true;
-  try { renderBlueprints(await api('/api/blueprint', body)); } catch (e) { showErr($('bpOut'), e); }
+  try { renderBlueprints(await api('/api/blueprint', body), body); } catch (e) { showErr($('bpOut'), e); }
   $('bpMake').disabled = false;
 };
-function renderBlueprints(j) {
+function renderBlueprints(j, body) {
   const d = j.data;
   if (!d?.blueprints) { $('bpOut').innerHTML = `<div class="md">${md(j.markdown)}</div>`; return; }
   const many = d.blueprints.length > 1;
@@ -851,6 +831,7 @@ function renderBlueprints(j) {
     <div class="row"><button id="bpInstall" class="primary" ${okFiles.length ? '' : 'disabled'}>Install into the game</button><span class="hint">into session “<b id="bpInstallTo"></b>” (change it above)</span>${d.sketchUrl ? `<a class="btn" href="${esc(d.sketchUrl)}" target="_blank">Open layout sketch ↗</a>` : ''}</div>
     <div id="bpInstallOut"></div>${cards}`;
   $('bpInstallTo').textContent = $('bpSession').value;
+  if (d.dir && body) $('bpOut').prepend(saveBar('blueprint', d.blueprints[0]?.name || 'Blueprint', { settings: body, markdown: j.markdown, dir: d.dir }));
   $('bpInstall').onclick = async () => {
     try {
       const r = await api('/api/blueprint-install', { files: okFiles, session: $('bpSession').value });
@@ -859,6 +840,151 @@ function renderBlueprints(j) {
   };
 }
 $('bpSession').onchange = () => { if ($('bpInstallTo')) $('bpInstallTo').textContent = $('bpSession').value; };
+// ---------------------------------------------------------------- saved plans
+const KIND_LABEL = { plan: 'Plan', design: 'Design', rebuild: 'Rebuild', blueprint: 'Blueprint' };
+/** "💾 Save" bar shown above a result. payload: { settings, markdown, dir } */
+function saveBar(kind, defaultName, payload) {
+  const div = document.createElement('div');
+  div.className = 'savebar';
+  div.innerHTML = `<b>💾 Save this ${KIND_LABEL[kind].toLowerCase()}</b><input type="text" maxlength="60" placeholder="name"><button class="primary">Save</button><span class="hint">Keeps a report you can open any time from the Saved tab, even without the planner.</span>`;
+  const input = div.querySelector('input');
+  const btn = div.querySelector('button');
+  const hint = div.querySelector('.hint');
+  input.value = defaultName || KIND_LABEL[kind];
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') btn.click(); });
+  btn.onclick = async () => {
+    btn.disabled = true;
+    try {
+      const r = await api('/api/save', { kind, name: input.value.trim() || defaultName, ...payload });
+      hint.innerHTML = `✓ Saved. <a href="${esc(r.data.reportUrl)}" target="_blank">Open the report ↗</a> · it's also in the <a href="#" data-go="saved">Saved tab</a>.`;
+      hint.querySelector('[data-go]').onclick = (e) => { e.preventDefault(); document.querySelector('#tabs button[data-tab=saved]').click(); };
+    } catch (e) { hint.innerHTML = `<span style="color:var(--bad)">${esc(e.message)}</span>`; btn.disabled = false; }
+  };
+  return div;
+}
+const duration = (min) => (min >= 90 ? `${Math.round((min / 60) * 10) / 10} h` : `${Math.round(min)} min`);
+const goalName = (goal, fallback) => (!goal ? fallback : goal.mode === 'items' ? `Auto mix: ${goal.targets.map((t) => t.name).join(', ')}` : `Milestone ${fallback.toLowerCase()} (${duration(goal.minutes)})`).slice(0, 60);
+const firstHeading = (text) => (String(text).split('\n').find((l) => /^# /.test(l)) || '').replace(/^# /, '').replace(/\*\*/g, '').slice(0, 60);
+
+let savedList = [];
+async function loadSaved() {
+  try {
+    savedList = (await api('/api/saved')).data;
+    $('savedOut').innerHTML = savedList.length ? savedList.map((x, k) => `<div class="bpcard">
+      <h3>${esc(x.name)} <span class="pill">${esc(KIND_LABEL[x.kind] || x.kind)}</span></h3>
+      <div class="bpfacts"><span>saved <b>${esc(new Date(x.created).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }))}</b></span>${x.save?.saveName ? `<span>from save <b>${esc(x.save.saveName)}</b></span>` : ''}${x.has?.guide ? '<span>📋 rebuild guide</span>' : ''}${x.has?.sketch ? '<span>🗺 layout sketch</span>' : ''}${x.has?.blueprints ? `<span>🧱 ${x.has.blueprints} blueprint(s)</span>` : ''}</div>
+      ${x.summary ? `<div class="hint">${esc(x.summary)}</div>` : ''}
+      <div class="row" style="margin-top:8px"><a class="btn" href="${esc(x.reportUrl)}" target="_blank" style="border-color:var(--accent);color:var(--accent)">📄 Open report ↗</a><button data-load="${k}" title="Put the same choices back into the planner, to plan it again with your current save">↺ Load settings</button><a class="btn" href="${esc(x.reportUrl)}" download="${esc(x.name)}.html">⬇ Download report</a><button data-folder="${k}">📁 Show folder</button><button data-del="${k}">🗑 Delete</button></div>
+    </div>`).join('') : '<p class="hint">Nothing saved yet. Under any plan, design, rebuild or blueprint result, press <b>💾 Save</b>.</p>';
+    $('savedOut').querySelectorAll('[data-load]').forEach((b) => b.onclick = () => loadSettings(savedList[Number(b.dataset.load)]));
+    $('savedOut').querySelectorAll('[data-folder]').forEach((b) => b.onclick = () => api('/api/saved-open-folder', { id: savedList[Number(b.dataset.folder)].id }).catch((e) => showErr($('savedOut'), e)));
+    $('savedOut').querySelectorAll('[data-del]').forEach((b) => b.onclick = async () => {
+      const x = savedList[Number(b.dataset.del)];
+      if (!confirm(`Delete “${x.name}”?\n\nIts folder (report, sketch and blueprint files) is removed for good.`)) return;
+      try { await api('/api/saved-delete', { id: x.id }); await loadSaved(); } catch (e) { showErr($('savedOut'), e); }
+    });
+  } catch (e) { showErr($('savedOut'), e); }
+}
+$('savedRefresh').onclick = loadSaved;
+$('savedFolderBtn').onclick = () => api('/api/saved-open-folder', {}).catch((e) => showErr($('savedOut'), e));
+
+// --- load the settings of a saved plan back into the forms
+const setSel = (id, v, fallback) => { const el = $(id); const val = String(v ?? fallback); el.value = [...el.options].some((o) => o.value === val) ? val : String(fallback); };
+/** Ticks these nodes; nodes not in the nearby list come from the map (like picking them there). Returns how many are gone. */
+async function tickNodes(cls, ids = []) {
+  const want = new Set(ids);
+  const boxes = () => [...document.querySelectorAll(`.${cls}`)];
+  boxes().forEach((c) => { c.checked = want.has(c.value); });
+  const absent = ids.filter((id) => !boxes().some((c) => c.value === id));
+  let missing = 0;
+  if (absent.length) {
+    try { if (!mapData) await loadMap(); } catch { /* map unavailable */ }
+    for (const id of absent) {
+      const n = mapData?.nodes.find((x) => x.id === id);
+      if (n) { picked.add(id); syncPicked(n); } else missing++;
+    }
+  }
+  return missing;
+}
+function applyRules(req = {}) {
+  $('alts').checked = req.useAlternates !== false;
+  $('oc').checked = !!req.allowOverclock;
+  $('locked').checked = !!req.allowLocked;
+  if (req.resources) setSel('resources', req.resources, $('resources').value);
+  if (req.maxNodeDistance) $('distance').value = req.maxNodeDistance;
+}
+function applyTargets(req = {}, goal) {
+  $('goalMode').value = goal;
+  document.querySelectorAll('#targets .target').forEach((d) => d.remove());
+  for (const t of req.targets || []) addTarget(t.item, t.rate ?? '');
+  syncGoalMode();
+  $('maximize').value = req.maximize || '';
+}
+async function applyPlanSettings(req = {}, ar = {}) {
+  // plans from the command line may have no goal: items without an amount = automatic items
+  applyTargets(req, req.goal || (!req.targets?.length && !req.maximize ? 'milestones' : req.targets?.some((t) => !(t.rate > 0)) ? 'items' : 'targets'));
+  setSel('goalMinutes', req.goalMinutes, 'auto');
+  $('planRebuild').checked = !!req.rebuild;
+  applyRules(req);
+  setSel('mode', ar.mode, 'foundation');
+  $('width').value = ar.width ?? '';
+  $('length').value = ar.length ?? '';
+  setSel('unit', ar.unit, 'foundations');
+  setSel('floors', ar.floors, 'auto');
+  $('bp').checked = !!ar.blueprint;
+  if (!$('planNodes').dataset.loaded) await loadNodePicker('planNodes', 'planNode');
+  return tickNodes('planNode', req.nodes || []);
+}
+async function applyRebuildSettings({ request: r = {}, area: a = {}, scope: sc = {} } = {}) {
+  if (!$('rbNodes').dataset.loaded) await loadRbNodes();
+  $('rbGoal').value = r.goal === 'active' ? 'active' : !r.goal || r.goal === 'milestones' ? 'tier' : 'targets';
+  $('rbGoal').onchange();
+  if ($('rbGoal').value === 'targets') applyTargets(r, r.goal); // those targets live on the Plan tab
+  setSel('rbMinutes', r.goalMinutes, 'auto');
+  applyRules({ ...r, resources: undefined });
+  setSel('rbScope', sc.scope, 'near');
+  $('rbRadius').value = sc.radius || 250;
+  $('rbPower').checked = !!sc.includePower;
+  setSel('rbMode', a.mode, 'foundation');
+  $('rbWidth').value = a.width ?? '';
+  $('rbLength').value = a.length ?? '';
+  setSel('rbUnit', a.unit, 'foundations');
+  setSel('rbFloors', a.floors, 'auto');
+  $('rbBp').checked = !!a.blueprint;
+  return tickNodes('rbNode', r.nodes || []);
+}
+async function applyBlueprintSettings(b = {}) {
+  if (!bpOpts) await loadBpTab();
+  const src = b.source || 'module';
+  if ((src === 'rebuild' || src === 'stage1') && !$('rbNodes').dataset.loaded) await loadRbNodes();
+  document.querySelector(`#bpSrcs .src[data-src="${CSS.escape(src)}"]`)?.click();
+  $('bpName').value = b.name || '';
+  if (src === 'module') {
+    const m = b.module || {};
+    $('bpRecipe').value = m.recipe || '';
+    $('bpBy').value = m.rate ? 'rate' : 'count';
+    $('bpMachines').value = m.machines || 1;
+    $('bpClock').value = m.clock || 100;
+    $('bpRate').value = m.rate || '';
+    syncBpBy();
+    if (m.beltTier) setSel('bpBelt', m.beltTier, $('bpBelt').value);
+    setSel('bpGap', m.gap || 0, '0');
+    markBpPreset();
+    return 0;
+  }
+  return src === 'plan' ? applyPlanSettings(b.request, b.area) : applyRebuildSettings(b);
+}
+async function loadSettings(x) {
+  const s = x.settings || {};
+  const where = { plan: ['plan', 'planOut', 'Plan'], design: ['plan', 'planOut', 'Design layout'], rebuild: ['rebuild', 'rbOut', 'Plan rebuild'], blueprint: ['blueprints', 'bpOut', 'Make blueprint'] }[x.kind];
+  if (!where) return;
+  try {
+    const missing = x.kind === 'rebuild' ? await applyRebuildSettings(s) : x.kind === 'blueprint' ? await applyBlueprintSettings(s) : await applyPlanSettings(s.request, s.area);
+    document.querySelector(`#tabs button[data-tab=${where[0]}]`).click();
+    $(where[1]).innerHTML = `<div class="md"><div class="note">Loaded the settings of “${esc(x.name)}”. Press <b>${where[2]}</b> to plan it again with your current save.${missing ? ` ${missing} node(s) from it are not in this save's map and were left out.` : ''}</div></div>`;
+    window.scrollTo(0, 0);
+  } catch (e) { showErr($('savedOut'), e); }
+}
 $('itemBtn').onclick = async () => {
   try { $('itemMd').innerHTML = md((await api('/api/item', { item: $('itemQ').value })).markdown); } catch (e) { showErr($('itemMd'), e); }
 };

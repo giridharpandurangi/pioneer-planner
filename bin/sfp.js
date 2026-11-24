@@ -28,13 +28,15 @@ Usage: node bin/sfp.js <command> [args] [--save NAME]
   blueprint plan "Item:rate" ...   blueprint of a planned factory (same options as design)
   blueprint rebuild | stage1    blueprint of the whole rebuild, or only its small stage 1
                                 (all: --name "My blueprint", --install "Session name")
+  saved                         plans you kept with --save-as (each has a report.html that opens in any browser)
   context                       markdown brief of your factory to paste into any AI
   web [--port 5178]             local web UI
   mcp                           MCP server on stdio (for Claude / other AI clients)
 
 Don't know how much to make? Leave the amounts out:
   plan --goal milestones        whatever your next milestones + space elevator still need (default if no items),
-                                sized to finish in ~30 min; --minutes 60 = smaller, --minutes fastest = as big as nodes allow
+                                sized to what your free power can run (never faster than 30 min);
+                                --minutes 60 = finish in ~1 h, --minutes fastest = as big as the nodes allow
   plan --goal active            only your active milestone
   plan "Iron Plate" "Rotor"     these items, as much as your nodes allow (no ":rate" = automatic)
 
@@ -63,6 +65,7 @@ Design area:
   --blueprint                   also write in-game blueprints (.sbp), one per floor
   --install "Session name"      copy those blueprints into the game's blueprint folder
   --open                        open the sketch in your browser
+  --save-as "My plan"           keep the result of plan / design / rebuild / blueprint in saved/ (report.html + files)
 
 Examples:
   node bin/sfp.js improve
@@ -121,13 +124,19 @@ async function main() {
     nodeResources: opts['node-res'] ? String(opts['node-res']).split(',') : undefined,
     rebuild: !!opts.rebuild,
     goal: opts.goal,
-    goalMinutes: opts.minutes === 'fastest' ? 'fastest' : opts.minutes ? Number(opts.minutes) : undefined,
+    goalMinutes: ['fastest', 'auto'].includes(opts.minutes) ? opts.minutes : opts.minutes ? Number(opts.minutes) : undefined,
   });
   const area = () => ({
     mode: opts.mode, width: opts.width && Number(opts.width), length: opts.length && Number(opts.length), unit: opts.unit,
     floors: opts.floors === 'auto' || !opts.floors ? 'auto' : Number(opts.floors), foundationThickness: opts.thickness && Number(opts.thickness), title: opts.title,
     blueprint: !!opts.blueprint, installSession: typeof opts.install === 'string' ? opts.install : undefined,
   });
+  // --save-as "name": keep the result in saved/ (a report.html that opens in any browser + the settings to run it again)
+  const keep = (kind, settings, r) => {
+    if (typeof opts['save-as'] !== 'string') return;
+    const s = A.saveResult(kind, opts['save-as'], settings, r);
+    console.log(`\nSaved: ${s.data.report}`);
+  };
   // open with the default browser without going through a shell (paths with & or spaces stay safe)
   const openFile = (f) => {
     if (!opts.open || !f) return;
@@ -144,10 +153,16 @@ async function main() {
     case 'nodes': return out(A.nodesAction({ resource: pos[0], purity: opts.purity, onlyFree: !opts.all, limit: Number(opts.limit) || 15 }));
     case 'item': return out(A.itemAction(pos.join(' ')));
     case 'context': return out(A.contextAction());
-    case 'plan': return out(A.planAction(request()));
+    case 'plan': {
+      const r = A.planAction(request());
+      out(r);
+      return keep('plan', { request: request() }, r);
+    }
+    case 'saved': return out(A.savedListAction());
     case 'design': {
       const r = A.designAction(request(), area());
       out(r);
+      keep('design', { request: request(), area: area() }, r);
       return openFile(r.data?.files?.html);
     }
     case 'needs': return out(A.needsAction({ scope: opts.active ? 'active' : 'tier' }));
@@ -166,10 +181,12 @@ async function main() {
       const num = (v) => (v === undefined || v === true ? undefined : Number(v));
       const dis = opts.dismantle;
       const scope = { scope: dis && /^[\d,]+$/.test(String(dis)) ? String(dis).split(',').map(Number) : dis || 'near', radius: num(opts.radius), includePower: !!opts['dismantle-power'] };
-      const r = source === 'module'
-        ? A.blueprintAction({ source, name, installSession, module: { recipe: pos.join(' '), machines: num(opts.machines), clock: num(opts.clock), rate: num(opts.rate), beltTier: num(opts.belt), gap: num(opts.gap) } })
-        : A.blueprintAction({ source, name, installSession, request: { ...request(), rebuild: source !== 'plan' || !!opts.rebuild }, area: area(), scope });
+      const body = source === 'module'
+        ? { source, name, module: { recipe: pos.join(' '), machines: num(opts.machines), clock: num(opts.clock), rate: num(opts.rate), beltTier: num(opts.belt), gap: num(opts.gap) } }
+        : { source, name, request: { ...request(), rebuild: source !== 'plan' || !!opts.rebuild }, area: area(), scope };
+      const r = A.blueprintAction({ ...body, installSession });
       out(r);
+      keep('blueprint', body, r);
       return openFile(r.data?.sketchUrl && r.data.blueprints?.[0] ? path.join(ROOT, 'output', r.data.blueprints[0].file.split('/')[0], 'index.html') : null);
     }
     case 'rebuild': {
@@ -177,6 +194,7 @@ async function main() {
       const scope = { scope: dis && /^[\d,]+$/.test(String(dis)) ? String(dis).split(',').map(Number) : dis || 'near', radius: opts.radius ? Number(opts.radius) : undefined, includePower: !!opts['dismantle-power'] };
       const r = A.rebuildAction({ ...request(), rebuild: true }, area(), scope);
       out(r);
+      keep('rebuild', { request: { ...request(), rebuild: true }, area: area(), scope }, r);
       return openFile(r.data?.files?.html);
     }
     default:

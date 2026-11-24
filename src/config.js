@@ -15,6 +15,8 @@ function readUserConfig() {
   try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return {}; }
 }
 export const userConfig = readUserConfig();
+/** Plans / designs you chose to keep (one folder each, with a report.html that opens in any browser). */
+export const SAVED_DIR = path.resolve(process.env.SFP_SAVED_DIR || userConfig.savedDir || path.join(ROOT, 'saved'));
 
 function steamLibraries() {
   const roots = [

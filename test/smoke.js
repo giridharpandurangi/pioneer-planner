@@ -89,19 +89,47 @@ test('automatic amounts: milestones and items modes', () => {
   assert.equal(items.data.goal?.mode, 'items');
   assert.ok(items.data.goal.targets[0].rate > 0, 'picked a rate automatically');
 });
-test('milestone factory is sized to a finish time, not to every node in range', () => {
+test('milestone factory is sized to free power / a finish time, not to every node in range', () => {
   const def = A.planAction({ goal: 'milestones' });
   if (!def.data?.goal) return; // nothing missing in this save
-  const fast = A.planAction({ goal: 'milestones', goalMinutes: 'fastest' }).data;
   const machines = (p) => p.steps.reduce((a, s) => a + s.machines, 0);
+  const fast = A.planAction({ goal: 'milestones', goalMinutes: 'fastest' }).data;
   assert.equal(fast.goal.limitedBy, 'nodes');
+  assert.ok(fast.goal.minutes > 0, 'a mix of all producible goal items is found (big amounts must not end at t = 0)');
+  // default "auto": runs on the free power, never planned faster than 30 min
+  const g = def.data.goal;
+  assert.ok(g.minutes >= Math.min(30, g.fastestMinutes) - 0.1);
+  if (g.limitedBy === 'power') assert.ok(def.data.totals.powerMW <= g.powerBudgetMW * 1.05, 'fits the free power');
   if (fast.goal.fastestMinutes < 30) {
-    assert.equal(def.data.goal.minutes, 30, 'default finish time');
-    assert.equal(def.data.goal.limitedBy, 'time');
-    assert.ok(machines(def.data) < machines(fast), 'slower finish = fewer machines');
+    const half = A.planAction({ goal: 'milestones', goalMinutes: 30 }).data;
+    assert.equal(half.goal.minutes, 30, 'a picked finish time');
+    assert.equal(half.goal.limitedBy, 'time');
+    assert.ok(machines(half) < machines(fast), 'slower finish = fewer machines');
     const hour = A.planAction({ goal: 'milestones', goalMinutes: 60 }).data;
-    assert.ok(machines(hour) <= machines(def.data), '1 hour is no bigger than 30 min');
+    assert.ok(machines(hour) <= machines(half), '1 hour is no bigger than 30 min');
   }
+});
+test('saved plans: report opens on its own, settings kept, delete only saved folders', () => {
+  const settings = { request: { goal: 'targets', targets: [{ item: 'Iron Plate', rate: 20 }] }, area: { mode: 'foundation' } };
+  const r = A.designAction(settings.request, settings.area);
+  const s = A.saveResult('design', 'Smoke test design', settings, r).data;
+  try {
+    const html = fs.readFileSync(s.report, 'utf8');
+    assert.match(html, /<h1>Smoke test design<\/h1>/);
+    assert.match(html, /id="sketch"/, 'sketch embedded');
+    assert.ok(!html.includes(OUTPUT_DIR), 'no links back into output/');
+    assert.ok(fs.existsSync(path.join(s.folder, 'sketch.html')));
+    const listed = A.savedListAction().data.find((x) => x.id === s.id);
+    assert.deepEqual(listed.settings, settings);
+    assert.equal(listed.kind, 'design');
+    assert.throws(() => A.savedDeleteAction('..'), /Unknown saved plan/);
+    assert.throws(() => A.savedDeleteAction('../output'), /Unknown saved plan/);
+    assert.throws(() => A.saveAction({ kind: 'design', name: 'x', dir: '../src' }), /output folder/);
+  } finally {
+    A.savedDeleteAction(s.id);
+    fs.rmSync(r.data.files.dir, { recursive: true, force: true });
+  }
+  assert.ok(!fs.existsSync(s.folder), 'deleted');
 });
 test('upgrade line + compare plan at better tiers', () => {
   const lines = A.linesAction().data.lines.filter((l) => l.miners.length);

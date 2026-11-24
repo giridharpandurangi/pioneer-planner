@@ -107,13 +107,20 @@ export function goalHeader(goal) {
   const blocked = goal.blocked?.length ? `\nCan't make with these nodes/unlocks: ${goal.blocked.map((b) => b.name).join(', ')}.` : '';
   if (goal.mode === 'items') return `> **Automatic amounts** — as much as your nodes allow: ${list}. The mix follows what your milestones still need (equal share for items they don't need).${blocked}\n\n`;
   const missing = goal.needs.needs.filter((n) => n.missing > 0).map((n) => `${n.missing} ${n.name}`).join(', ');
-  const speed = goal.limitedBy === 'time'
-    ? ` Sized to finish in the time you picked; your nodes could do it in ~${goal.fastestMinutes} min, with a much bigger factory.`
-    : goal.wantedMinutes
-      ? ` That's as fast as these nodes allow (you picked ~${goal.wantedMinutes} min: tick more or better nodes to go faster).`
-      : ' That\'s as fast as these nodes allow.';
-  return `> **Automatic amounts** — you still need ${missing} for ${goal.needs.goals.map((g) => g.name).join(', ')}. This factory makes ${list}, which finishes all of it in **~${goal.minutes} min**.${speed}${blocked}\n\n`;
+  const fastest = ` Your nodes could do it in ~${duration(goal.fastestMinutes)} with a much bigger factory (and more power).`;
+  const speed = goal.limitedBy === 'power'
+    ? ` Sized to run on your free power (~${goal.powerBudgetMW} MW).${fastest} Pick a finish time to plan bigger, e.g. after adding generators.`
+    : goal.limitedBy === 'time'
+      ? ` Sized to finish in that time${goal.wantedMinutes ? ' (you picked it)' : ''}.${fastest}`
+      : goal.wantedMinutes || goal.powerBudgetMW
+        ? ' That\'s as fast as these nodes allow: tick more or better nodes to go faster.'
+        : ' That\'s as fast as these nodes allow.';
+  const noPower = goal.noFreePower ? '\n**You have no spare power right now**: build generators first (this plan is sized for ~30 min).' : '';
+  return `> **Automatic amounts** — you still need ${missing} for ${goal.needs.goals.map((g) => g.name).join(', ')}. This factory makes ${list}, which finishes all of it in **~${duration(goal.minutes)}**.${speed}${noPower}${blocked}\n\n`;
 }
+
+/** 45 → "45 min", 135 → "2.3 h" */
+export const duration = (min) => (min >= 90 ? `${Math.round((min / 60) * 10) / 10} h` : `${Math.round(min)} min`);
 
 export function needs(n) {
   const L = ['# What your next goals still need'];
@@ -207,4 +214,9 @@ export function context(m, a) {
     status(m, a),
     improvements(m, a, 15).replace(/^# .*\n/, '\n# Issues found\n'),
   ].join('\n');
+}
+
+export function savedList(list) {
+  if (!list.length) return 'Nothing saved yet. Add `--save-as "a name"` to plan / design / rebuild / blueprint (or press Save in the web UI).';
+  return `# Saved plans\n\n${table(['Name', 'Kind', 'Saved', 'From save', 'Report'], list.map((x) => [x.name, x.kind, new Date(x.created).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }), x.save?.saveName || '—', x.report]))}`;
 }
